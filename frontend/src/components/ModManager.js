@@ -6,7 +6,9 @@ function ModManager() {
   const [loading, setLoading] = useState(true);
   const [searchUrl, setSearchUrl] = useState('');
   const [searchResult, setSearchResult] = useState(null);
+  const [dependencyTree, setDependencyTree] = useState(null);
   const [message, setMessage] = useState(null);
+  const [addWithDeps, setAddWithDeps] = useState(true);
 
   useEffect(() => {
     loadMods();
@@ -28,12 +30,19 @@ function ModManager() {
 
     setMessage(null);
     setSearchResult(null);
+    setDependencyTree(null);
 
     try {
       const response = await axios.get('/api/mods/search', {
         params: { url: searchUrl },
       });
       setSearchResult(response.data);
+
+      // Fetch dependency tree if mod has dependencies
+      if (response.data.dependencies && response.data.dependencies.length > 0) {
+        const depResponse = await axios.get(`/api/mods/${response.data.id}/dependencies`);
+        setDependencyTree(depResponse.data);
+      }
     } catch (error) {
       setMessage({
         type: 'error',
@@ -46,10 +55,19 @@ function ModManager() {
     if (!searchResult) return;
 
     try {
-      await axios.post('/api/mods/add', { workshopId: searchResult.id });
-      setMessage({ type: 'success', text: 'Mod added successfully' });
+      const response = await axios.post('/api/mods/add', {
+        workshopId: searchResult.id,
+        withDependencies: addWithDeps
+      });
+
+      setMessage({
+        type: 'success',
+        text: response.data.message || 'Mod added successfully'
+      });
+
       setSearchUrl('');
       setSearchResult(null);
+      setDependencyTree(null);
       loadMods();
     } catch (error) {
       setMessage({
@@ -209,19 +227,36 @@ function ModManager() {
         <h3>Add New Mod</h3>
         <div style={{ marginTop: '15px' }}>
           <div className="form-group">
-            <label>Steam Workshop URL or ID</label>
+            <label>Arma Reforger Workshop URL or ID</label>
             <div style={{ display: 'flex', gap: '10px' }}>
               <input
                 type="text"
                 value={searchUrl}
                 onChange={(e) => setSearchUrl(e.target.value)}
-                placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=123456789"
+                placeholder="https://reforger.armaplatform.com/workshop/ABC123... or Workshop ID"
                 style={{ flex: 1 }}
               />
               <button className="btn btn-primary" onClick={handleSearch}>
                 🔍 Search
               </button>
             </div>
+            <div style={{ fontSize: '12px', color: '#718096', marginTop: '5px' }}>
+              Supports: Arma Platform URLs, Workshop IDs, and Steam Workshop URLs
+            </div>
+          </div>
+
+          <div style={{ marginTop: '15px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={addWithDeps}
+                onChange={(e) => setAddWithDeps(e.target.checked)}
+                style={{ width: '18px', height: '18px' }}
+              />
+              <span style={{ fontSize: '14px', color: '#cbd5e0' }}>
+                Automatically add all dependencies
+              </span>
+            </label>
           </div>
 
           {searchResult && (
@@ -240,16 +275,41 @@ function ModManager() {
                     {searchResult.name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#718096', marginBottom: '8px' }}>
-                    By: {searchResult.author} | Size: {searchResult.size}
+                    By: {searchResult.author} | Size: {searchResult.size} | Version: {searchResult.version}
                   </div>
                   {searchResult.dependencies && searchResult.dependencies.length > 0 && (
                     <div style={{ fontSize: '12px', color: '#f59e0b', marginBottom: '8px' }}>
                       ⚠️ Requires {searchResult.dependencies.length} dependencies
                     </div>
                   )}
+                  {dependencyTree && dependencyTree.totalCount > 1 && (
+                    <div style={{
+                      marginTop: '10px',
+                      padding: '10px',
+                      background: '#1a1f26',
+                      borderRadius: '6px',
+                      border: '1px solid #2d3748'
+                    }}>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#4fc3f7', marginBottom: '8px' }}>
+                        📦 Dependency Tree ({dependencyTree.totalCount} total mods)
+                      </div>
+                      <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '12px', color: '#cbd5e0' }}>
+                        {dependencyTree.dependencies.filter(d => d.id !== searchResult.id).map((dep, idx) => (
+                          <li key={idx} style={{ marginBottom: '4px' }}>
+                            {dep.name} <span style={{ color: '#718096' }}>({dep.id})</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {addWithDeps && (
+                        <div style={{ marginTop: '8px', fontSize: '11px', color: '#10b981' }}>
+                          ✓ All dependencies will be added automatically
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <button className="btn btn-success" onClick={handleAddMod}>
-                  ➕ Add Mod
+                  ➕ {addWithDeps && dependencyTree ? `Add ${dependencyTree.totalCount} Mods` : 'Add Mod'}
                 </button>
               </div>
             </div>

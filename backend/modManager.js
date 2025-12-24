@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
-const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const workshopApi = require('./workshopApi');
 
 // Mod database (persisted to file)
 const modDbPath = path.join(__dirname, '../config/mods.json');
@@ -34,40 +33,26 @@ loadModsDb();
 
 // Parse mod ID from Workshop URL
 function parseWorkshopId(url) {
-    const match = url.match(/id=(\d+)/);
-    return match ? match[1] : null;
+    // Support multiple URL formats
+    let match = url.match(/id=(\d+)/); // Steam format
+    if (match) return match[1];
+
+    match = url.match(/workshop\/([A-Z0-9]+)/i); // Arma Platform format
+    if (match) return match[1];
+
+    // If it's just an ID
+    if (/^[A-Z0-9]+$/i.test(url.trim())) {
+        return url.trim();
+    }
+
+    return null;
 }
 
-// Fetch mod info from Steam Workshop
+// Fetch mod info from Arma Reforger Workshop with dependencies
 async function fetchModInfo(workshopId) {
     try {
-        const url = `https://steamcommunity.com/sharedfiles/filedetails/?id=${workshopId}`;
-        const response = await axios.get(url);
-        const $ = cheerio.load(response.data);
-
-        const modInfo = {
-            id: workshopId,
-            name: $('.workshopItemTitle').text().trim() || 'Unknown Mod',
-            author: $('.friendBlockContent').text().trim() || 'Unknown',
-            description: $('.workshopItemDescription').text().trim() || '',
-            size: $('.detailsStatRight').first().text().trim() || 'Unknown',
-            updated: $('.detailsStatRight').eq(1).text().trim() || 'Unknown',
-            dependencies: [],
-            requiredBy: [],
-            status: 'not_installed',
-            enabled: false
-        };
-
-        // Try to find dependencies in description
-        const descLower = modInfo.description.toLowerCase();
-        if (descLower.includes('require') || descLower.includes('depend')) {
-            // Extract workshop IDs from description
-            const dependencyMatches = modInfo.description.match(/id=(\d+)/g);
-            if (dependencyMatches) {
-                modInfo.dependencies = dependencyMatches.map(m => m.replace('id=', ''));
-            }
-        }
-
+        // Use Workshop API for Arma Reforger mods
+        const modInfo = await workshopApi.getModDetails(workshopId);
         return modInfo;
     } catch (error) {
         console.error(`Error fetching mod info for ${workshopId}:`, error.message);
@@ -75,6 +60,7 @@ async function fetchModInfo(workshopId) {
             id: workshopId,
             name: 'Unknown Mod',
             error: error.message,
+            dependencies: [],
             status: 'error'
         };
     }
@@ -88,7 +74,7 @@ function checkDependencies(modId) {
     const missing = [];
     const warnings = [];
 
-    for (const depId of mod.dependencies) {
+    for (const depId of (mod.dependencies || [])) {
         const dependency = modsDatabase.installed.find(m => m.id === depId);
 
         if (!dependency) {
@@ -178,9 +164,27 @@ router.get('/mods/search', async (req, res) => {
     }
 });
 
+// Get full dependency tree for a mod
+router.get('/mods/:id/dependencies', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const result = await workshopApi.getAllDependencies(id);
+
+        res.json({
+            modId: id,
+            dependencies: result.mods,
+            tree: result.tree,
+            totalCount: result.mods.length
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Add mod to available list
 router.post('/mods/add', async (req, res) => {
-    const { workshopId, url } = req.body;
+    const { workshopId, url, withDependencies } = req.body;
 
     let id = workshopId;
     if (url) {
@@ -198,10 +202,36 @@ router.post('/mods/add', async (req, res) => {
         }
 
         const modInfo = await fetchModInfo(id);
-        modsDatabase.installed.push(modInfo);
+
+        // If withDependencies is true, fetch and add all dependencies
+        const addedMods = [modInfo];
+
+        if (withDependencies && modInfo.dependencies && modInfo.dependencies.length > 0) {
+            const depResult = await workshopApi.getAllDependencies(id);
+
+            for (const depMod of depResult.mods) {
+                // Skip the main mod itself
+                if (depMod.id === id) continue;
+
+                // Skip if already in database
+                if (modsDatabase.installed.find(m => m.id === depMod.id)) continue;
+
+                addedMods.push(depMod);
+            }
+        }
+
+        // Add all mods to database
+        modsDatabase.installed.push(...addedMods);
         saveModsDb();
 
-        res.json({ success: true, mod: modInfo });
+        res.json({
+            success: true,
+            added: addedMods.length,
+            mods: addedMods,
+            message: addedMods.length > 1
+                ? `Added ${addedMods.length} mods (including ${addedMods.length - 1} dependencies)`
+                : 'Mod added successfully'
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -214,11 +244,7 @@ router.post('/mods/:id/install', async (req, res) => {
 
     try {
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        const steamCmd = path.join(config.steamCmdPath, 'steamcmd.exe');
-
-        if (!fs.existsSync(steamCmd)) {
-            return res.status(400).json({ error: 'SteamCMD not found' });
-        }
+        const steamCmd = config.steamCmdPath || '/usr/games/steamcmd';
 
         const mod = modsDatabase.installed.find(m => m.id === id);
         if (!mod) {
@@ -231,7 +257,7 @@ router.post('/mods/:id/install', async (req, res) => {
             return res.status(400).json({
                 error: 'Cannot install: missing dependencies',
                 missing: depCheck.missing,
-                suggestion: 'Please install required mods first'
+                suggestion: 'Please install required mods first or use "Add with Dependencies"'
             });
         }
 
@@ -294,7 +320,7 @@ router.post('/mods/:id/toggle', (req, res) => {
 
     // Check if disabling this mod affects others
     const affectedMods = modsDatabase.installed.filter(m =>
-        m.enabled && m.dependencies.includes(id)
+        m.enabled && (m.dependencies || []).includes(id)
     );
 
     const warnings = affectedMods.length > 0 ? {
@@ -316,7 +342,7 @@ router.delete('/mods/:id', (req, res) => {
 
     // Check if other mods depend on this
     const dependents = modsDatabase.installed.filter(m =>
-        m.dependencies.includes(id) && m.enabled
+        (m.dependencies || []).includes(id) && m.enabled
     );
 
     if (dependents.length > 0) {
@@ -342,7 +368,7 @@ router.get('/mods/validate', (req, res) => {
     });
 });
 
-// Auto-resolve dependencies
+// Auto-resolve dependencies (fetch missing dependencies info)
 router.post('/mods/:id/resolve-dependencies', async (req, res) => {
     const { id } = req.params;
 
@@ -352,19 +378,22 @@ router.post('/mods/:id/resolve-dependencies', async (req, res) => {
     }
 
     try {
+        const result = await workshopApi.getAllDependencies(id);
         const toInstall = [];
 
-        for (const depId of mod.dependencies) {
-            const existing = modsDatabase.installed.find(m => m.id === depId);
+        for (const depMod of result.mods) {
+            if (depMod.id === id) continue; // Skip main mod
+
+            const existing = modsDatabase.installed.find(m => m.id === depMod.id);
             if (!existing) {
-                const depInfo = await fetchModInfo(depId);
-                toInstall.push(depInfo);
+                toInstall.push(depMod);
             }
         }
 
         res.json({
             success: true,
             dependencies: toInstall,
+            tree: result.tree,
             message: `Found ${toInstall.length} missing dependencies`
         });
     } catch (error) {
