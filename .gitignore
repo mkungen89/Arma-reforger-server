@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Production builds
+frontend/build/
+dist/
+
+# Configuration files (may contain sensitive data)
+config/server-config.json
+config/mods.json
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Server files (these are downloaded during installation)
+# Don't commit the actual server installation
+# ArmaReforgerServer/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# NPM
+package-lock.json
+frontend/package-lock.json
