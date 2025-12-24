@@ -1,10 +1,56 @@
 # Arma Reforger Server Manager
 
-En komplett lösning för att hantera din Arma Reforger dedikerade server med modern Web-UI och Steam authentication.
+En komplett lösning för att hantera din Arma Reforger dedikerade server med modern Web-UI, Steam authentication, och avancerade automatiseringsfunktioner.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
+
+## ⭐ NYTT I VERSION 3.0
+
+### 🎯 Battlefield 3-Style Battlelog (PUBLIKT!)
+- **Publik åtkomst** - ingen inloggning krävs!
+- Spårning av kills, deaths, K/D ratio, score
+- XP och rangsystem (Recruit → Colonel)
+- Live event feed med realtidsuppdateringar
+- Leaderboards med olika sorteringsalternativ
+- Detaljerade spelarprofiler med vapenstatistik
+- Matchhistorik
+- BF3-inspirerad orange/svart design
+
+### 👥 Live Player Management
+- Realtidsövervakning av alla spelare
+- Kick/Ban/Warn system
+- Private messages till spelare
+- Broadcast till alla online
+- Ban-hantering med temporära/permanenta ban
+- Player history och event log
+- Session duration tracking
+- Statistik per spelare (K/D, score, ping)
+
+### ⏰ Automated Tasks & Scheduling
+- Schemalägg automatiska uppgifter
+- 3 schema-typer: Cron, Interval, En gång
+- 8 olika task-typer:
+  - Server Restart (med varning)
+  - Server Update (SteamCMD)
+  - Backup Creation
+  - Broadcast Messages
+  - Kick Idle Players
+  - Clear Logs
+  - Mod Updates
+  - Custom Shell Commands
+- Task execution history
+- Enable/disable tasks dynamiskt
+- "Run Now" för manuell körning
+
+### 💾 Backup & Restore System
+- Skapa ZIP-backups av server-filer
+- Konfigurerbart innehåll (config, mods, profiles, server)
+- Download backups
+- Restore från backups
+- Backup statistics
+- Automatisk backup via scheduler
 
 ## Funktioner
 
@@ -454,6 +500,52 @@ Bidrag är välkomna! Skapa en pull request eller öppna ett issue.
 MIT License - se LICENSE fil för detaljer
 
 ## Changelog
+
+### Version 3.0.0 (2025-12-25) 🎄
+**Major Update - Advanced Automation & Player Management**
+
+#### New Features:
+- ✅ **Battlefield 3-Style Battlelog** (PUBLIC)
+  - Live player statistics tracking
+  - XP and rank progression system (10 levels)
+  - Kill/death/weapon statistics
+  - Leaderboards and player profiles
+  - Live event feed
+  - BF3-inspired orange/black theme
+  - Accessible without login!
+
+- ✅ **Live Player Management**
+  - Real-time player monitoring
+  - Kick/Ban/Warn system with reasons
+  - Private messaging to players
+  - Broadcast messages to all online players
+  - Ban management (temporary/permanent)
+  - Player history and event log
+  - Session tracking with duration
+  - Auto-kick idle players
+
+- ✅ **Automated Tasks & Scheduling**
+  - Complete scheduling system with cron support
+  - Schedule types: Cron, Interval, One-time
+  - 8 task types: Restart, Update, Backup, Broadcast, Kick Idle, Clear Logs, Mod Update, Custom Commands
+  - Task execution history (500 events)
+  - Enable/disable tasks dynamically
+  - Manual execution ("Run Now")
+  - Next run time display
+
+- ✅ **Backup & Restore System**
+  - Create ZIP backups of server files
+  - Configurable backup contents (config/mods/profiles/server)
+  - Download and restore backups
+  - Backup statistics and management
+  - Automated backups via scheduler
+
+#### Improvements:
+- Enhanced navigation with new menu items
+- Admin-only access to advanced features
+- Improved real-time updates (WebSocket)
+- Better error handling and notifications
+- Optimized frontend build (83KB gzipped)
 
 ### Version 2.0.0
 - ✅ Steam authentication
