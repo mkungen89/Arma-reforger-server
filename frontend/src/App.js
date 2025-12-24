@@ -13,6 +13,7 @@ import UserManagement from './components/UserManagement';
 import Battlelog from './components/Battlelog';
 import PlayerManagement from './components/PlayerManagement';
 import Scheduler from './components/Scheduler';
+import BackupManager from './components/BackupManager';
 
 // Configure axios defaults
 axios.interceptors.request.use((config) => {
@@ -217,6 +218,11 @@ function App() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/backup">
+                    <i className="icon">💾</i> Backups
+                  </Link>
+                </li>
+                <li>
                   <Link to="/users">
                     <i className="icon">👥</i> Users
                   </Link>
@@ -257,6 +263,7 @@ function App() {
             {user?.role === 'admin' && (
               <>
                 <Route path="/scheduler" element={<Scheduler userRole={user?.role} />} />
+                <Route path="/backup" element={<BackupManager userRole={user?.role} />} />
                 <Route path="/users" element={<UserManagement />} />
               </>
             )}

@@ -14,6 +14,8 @@ const battlelog = require('./battlelog');
 const playerManager = require('./playerManager');
 const scheduler = require('./scheduler');
 const backup = require('./backup');
+const { router: discordRouter } = require('./discord');
+const modCollections = require('./modCollections');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +38,8 @@ app.use('/api', diagnostics);
 app.use('/api', playerManager);
 app.use('/api', scheduler);
 app.use('/api', backup);
+app.use('/api', discordRouter);
+app.use('/api', modCollections);
 
 // Load configuration
 const configPath = path.join(__dirname, '../config/server-config.json');
