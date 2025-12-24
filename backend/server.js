@@ -11,6 +11,7 @@ const modManager = require('./modManager');
 const diagnostics = require('./diagnostics');
 const { router: authRouter, requireAuth, requireAdmin } = require('./auth');
 const battlelog = require('./battlelog');
+const playerManager = require('./playerManager');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -30,6 +31,7 @@ app.use('/api', authRouter);
 app.use('/api', requireAuth);
 app.use('/api', modManager);
 app.use('/api', diagnostics);
+app.use('/api', playerManager);
 
 // Load configuration
 const configPath = path.join(__dirname, '../config/server-config.json');

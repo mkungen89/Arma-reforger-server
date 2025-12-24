@@ -11,6 +11,7 @@ import Configuration from './components/Configuration';
 import Logs from './components/Logs';
 import UserManagement from './components/UserManagement';
 import Battlelog from './components/Battlelog';
+import PlayerManagement from './components/PlayerManagement';
 
 // Configure axios defaults
 axios.interceptors.request.use((config) => {
@@ -188,6 +189,11 @@ function App() {
               </Link>
             </li>
             <li>
+              <Link to="/players">
+                <i className="icon">👥</i> Players
+              </Link>
+            </li>
+            <li>
               <Link to="/diagnostics">
                 <i className="icon">🔍</i> Diagnostics
               </Link>
@@ -236,6 +242,7 @@ function App() {
             <Route path="/" element={<Dashboard serverStatus={serverStatus} />} />
             <Route path="/server" element={<ServerControl serverStatus={serverStatus} userRole={user?.role} />} />
             <Route path="/mods" element={<ModManager userRole={user?.role} />} />
+            <Route path="/players" element={<PlayerManagement userRole={user?.role} />} />
             <Route path="/diagnostics" element={<Diagnostics />} />
             <Route path="/config" element={<Configuration userRole={user?.role} />} />
             <Route path="/logs" element={<Logs />} />
