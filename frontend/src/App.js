@@ -10,6 +10,7 @@ import Diagnostics from './components/Diagnostics';
 import Configuration from './components/Configuration';
 import Logs from './components/Logs';
 import UserManagement from './components/UserManagement';
+import Battlelog from './components/Battlelog';
 
 // Configure axios defaults
 axios.interceptors.request.use((config) => {
@@ -208,9 +209,22 @@ function App() {
                 </Link>
               </li>
             )}
+            <li>
+              <Link to="/battlelog">
+                <i className="icon">🎯</i> Battlelog
+              </Link>
+            </li>
           </ul>
 
           <div className="sidebar-footer">
+            <a
+              href="/battlelog"
+              target="_blank"
+              className="btn btn-primary btn-block"
+              style={{ marginBottom: '10px', textDecoration: 'none' }}
+            >
+              🌐 Public Battlelog
+            </a>
             <button className="btn btn-secondary btn-block" onClick={handleLogout}>
               🚪 Logout
             </button>
@@ -228,6 +242,7 @@ function App() {
             {user?.role === 'admin' && (
               <Route path="/users" element={<UserManagement />} />
             )}
+            <Route path="/battlelog" element={<Battlelog />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -10,6 +10,7 @@ const si = require('systeminformation');
 const modManager = require('./modManager');
 const diagnostics = require('./diagnostics');
 const { router: authRouter, requireAuth, requireAdmin } = require('./auth');
+const battlelog = require('./battlelog');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -18,6 +19,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend/build')));
+
+// PUBLIC routes (no auth required) - Battlelog is public!
+app.use('/api', battlelog);
 
 // Use routers (auth routes are public)
 app.use('/api', authRouter);
