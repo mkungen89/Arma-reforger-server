@@ -13,6 +13,7 @@ const { router: authRouter, requireAuth, requireAdmin } = require('./auth');
 const battlelog = require('./battlelog');
 const playerManager = require('./playerManager');
 const scheduler = require('./scheduler');
+const backup = require('./backup');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,6 +35,7 @@ app.use('/api', modManager);
 app.use('/api', diagnostics);
 app.use('/api', playerManager);
 app.use('/api', scheduler);
+app.use('/api', backup);
 
 // Load configuration
 const configPath = path.join(__dirname, '../config/server-config.json');
