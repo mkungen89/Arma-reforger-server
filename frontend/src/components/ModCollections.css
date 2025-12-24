@@ -1,0 +1,170 @@
+.mod-collections {
+  padding: 20px;
+}
+
+.collections-list {
+  display: grid;
+  gap: 15px;
+}
+
+.collection-card {
+  background: linear-gradient(135deg, #1a1f26 0%, #0f1419 100%);
+  border: 1px solid #2d3748;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s;
+}
+
+.collection-card:hover {
+  border-color: #4fc3f7;
+  box-shadow: 0 4px 12px rgba(79, 195, 247, 0.2);
+}
+
+.collection-header {
+  margin-bottom: 15px;
+}
+
+.collection-info h3 {
+  font-size: 18px;
+  color: #e8e8e8;
+  margin: 0 0 8px 0;
+}
+
+.collection-description {
+  color: #718096;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.collection-meta {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #718096;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.collection-mods {
+  background: #0f1419;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.collection-mods strong {
+  color: #4fc3f7;
+  font-size: 14px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.mods-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mod-badge {
+  background: rgba(79, 195, 247, 0.1);
+  border: 1px solid rgba(79, 195, 247, 0.3);
+  color: #4fc3f7;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mod-badge.more {
+  background: rgba(113, 128, 150, 0.1);
+  border-color: rgba(113, 128, 150, 0.3);
+  color: #718096;
+}
+
+.collection-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 15px;
+  border-top: 1px solid #2d3748;
+}
+
+/* Mod Selector */
+.mod-selector {
+  max-height: 300px;
+  overflow-y: auto;
+  background: #0f1419;
+  border: 1px solid #2d3748;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+.mod-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.mod-checkbox:hover {
+  background: rgba(79, 195, 247, 0.05);
+}
+
+.mod-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.mod-checkbox span {
+  color: #e8e8e8;
+  font-size: 14px;
+}
+
+.no-mods {
+  color: #718096;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+/* Scrollbar */
+.mod-selector::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mod-selector::-webkit-scrollbar-track {
+  background: #0a0e14;
+}
+
+.mod-selector::-webkit-scrollbar-thumb {
+  background: #2d3748;
+  border-radius: 4px;
+}
+
+.mod-selector::-webkit-scrollbar-thumb:hover {
+  background: #4a5568;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .collection-meta {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .collection-actions {
+    flex-direction: column;
+  }
+
+  .collection-actions button {
+    width: 100%;
+  }
+}

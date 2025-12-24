@@ -14,6 +14,8 @@ import Battlelog from './components/Battlelog';
 import PlayerManagement from './components/PlayerManagement';
 import Scheduler from './components/Scheduler';
 import BackupManager from './components/BackupManager';
+import DiscordSettings from './components/DiscordSettings';
+import ModCollections from './components/ModCollections';
 
 // Configure axios defaults
 axios.interceptors.request.use((config) => {
@@ -191,6 +193,11 @@ function App() {
               </Link>
             </li>
             <li>
+              <Link to="/collections">
+                <i className="icon">📦</i> Collections
+              </Link>
+            </li>
+            <li>
               <Link to="/players">
                 <i className="icon">👥</i> Players
               </Link>
@@ -220,6 +227,11 @@ function App() {
                 <li>
                   <Link to="/backup">
                     <i className="icon">💾</i> Backups
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/discord">
+                    <i className="icon">🤖</i> Discord
                   </Link>
                 </li>
                 <li>
@@ -256,6 +268,7 @@ function App() {
             <Route path="/" element={<Dashboard serverStatus={serverStatus} />} />
             <Route path="/server" element={<ServerControl serverStatus={serverStatus} userRole={user?.role} />} />
             <Route path="/mods" element={<ModManager userRole={user?.role} />} />
+            <Route path="/collections" element={<ModCollections userRole={user?.role} />} />
             <Route path="/players" element={<PlayerManagement userRole={user?.role} />} />
             <Route path="/diagnostics" element={<Diagnostics />} />
             <Route path="/config" element={<Configuration userRole={user?.role} />} />
@@ -264,6 +277,7 @@ function App() {
               <>
                 <Route path="/scheduler" element={<Scheduler userRole={user?.role} />} />
                 <Route path="/backup" element={<BackupManager userRole={user?.role} />} />
+                <Route path="/discord" element={<DiscordSettings userRole={user?.role} />} />
                 <Route path="/users" element={<UserManagement />} />
               </>
             )}
