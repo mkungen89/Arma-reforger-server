@@ -9,6 +9,7 @@ const si = require('systeminformation');
 // Import routers
 const modManager = require('./modManager');
 const diagnostics = require('./diagnostics');
+const { router: authRouter, requireAuth, requireAdmin } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -18,7 +19,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// Use routers
+// Use routers (auth routes are public)
+app.use('/api', authRouter);
+
+// Protected routes - require authentication
+app.use('/api', requireAuth);
 app.use('/api', modManager);
 app.use('/api', diagnostics);
 

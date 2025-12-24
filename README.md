@@ -1,11 +1,18 @@
 # Arma Reforger Server Manager
 
-En komplett lösning för att hantera din Arma Reforger dedikerade server med modern Web-UI.
+En komplett lösning för att hantera din Arma Reforger dedikerade server med modern Web-UI och Steam authentication.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
 
 ## Funktioner
+
+### 🔐 Steam Authentication
+- Säker inloggning med Steam ID
+- Rollbaserad åtkomstkontroll (Admin/GM/User)
+- Session-hantering
+- Steam API-integration för användarinformation
 
 ### 🎮 Serverhantering
 - Starta, stoppa och starta om servern med ett klick
@@ -27,6 +34,14 @@ En komplett lösning för att hantera din Arma Reforger dedikerade server med mo
 - Auto-fix för vissa problem
 - Omfattande kunskapsbas
 
+### 👥 Användarhantering
+- Lägg till/ta bort användare
+- Tre rollnivåer:
+  - **Admin**: Full åtkomst till alla funktioner
+  - **GM**: Kan hantera server och mods
+  - **User**: Endast läsåtkomst
+- Steam-profil integration
+
 ### 📊 Dashboard
 - Översikt över serverstatus
 - Systemstatistik i realtid
@@ -45,11 +60,86 @@ En komplett lösning för att hantera din Arma Reforger dedikerade server med mo
 - Hantera lösenord
 - Anpassade installationssökvägar
 
-## Snabbstart
+## Plattformar
+
+- ✅ **Ubuntu 20.04/22.04 LTS** (Rekommenderat för VPS)
+- ✅ **Windows 10/11**
+- ✅ **Windows Server 2019/2022**
+
+## Snabbstart - Ubuntu VPS
 
 ### Installation med ett kommando
 
-1. Klona detta repository:
+```bash
+# Klona repository
+git clone https://github.com/mkungen89/Arma-reforger-server.git
+cd Arma-reforger-server
+
+# Kör installation (kräver root/sudo)
+sudo bash install-ubuntu.sh
+```
+
+Installationen kommer att:
+- Installera Node.js, Git och dependencies
+- Installera SteamCMD
+- Ladda ner Arma Reforger Server (~10-30 GB)
+- Installera Web-UI
+- Konfigurera systemd service
+- Konfigurera firewall (UFW)
+- Skapa standardanvändare
+
+### Efter installation:
+
+1. **Hämta Steam Web API Key:**
+   - Gå till https://steamcommunity.com/dev/apikey
+   - Registrera en API-nyckel
+   - Lägg till den i `/opt/arma-reforger-manager/config/server-config.json`:
+   ```json
+   {
+     "steamApiKey": "DIN_API_NYCKEL_HÄR"
+   }
+   ```
+
+2. **Starta Web-UI:**
+   ```bash
+   sudo systemctl start arma-reforger-webui
+   sudo systemctl enable arma-reforger-webui  # Auto-start vid boot
+   ```
+
+3. **Öppna i webbläsare:**
+   ```
+   http://DIN_SERVER_IP:3001
+   ```
+
+4. **Logga in:**
+   - Standard admin SteamID: `76561199176944069`
+   - Byt till ditt eget SteamID i `/opt/arma-reforger-manager/config/users.json`
+   - Eller lägg till dig själv via User Management när du loggat in
+
+### Systemd Kommandon
+
+```bash
+# Starta Web-UI
+sudo systemctl start arma-reforger-webui
+
+# Stoppa Web-UI
+sudo systemctl stop arma-reforger-webui
+
+# Restart Web-UI
+sudo systemctl restart arma-reforger-webui
+
+# Status
+sudo systemctl status arma-reforger-webui
+
+# Se loggar
+sudo journalctl -u arma-reforger-webui -f
+```
+
+## Snabbstart - Windows
+
+### Installation med ett kommando
+
+1. Klona repository:
 ```bash
 git clone https://github.com/mkungen89/Arma-reforger-server.git
 cd Arma-reforger-server
@@ -57,102 +147,102 @@ cd Arma-reforger-server
 
 2. Högerklicka på `quick-install.bat` och välj **"Kör som administratör"**
 
-Det är allt! Scriptet kommer att:
-- Installera Chocolatey (om det inte finns)
-- Installera Node.js och Git (om de inte finns)
-- Installera SteamCMD
-- Ladda ner Arma Reforger Server
-- Installera alla dependencies för Web-UI
-- Konfigurera Windows Firewall
+### Starta Web-UI (Windows)
 
-### Starta Web-UI
-
-Efter installationen, kör:
 ```bash
 npm start
 ```
 
 Eller dubbelklicka på `start.bat`
 
-Öppna din webbläsare och gå till: **http://localhost:3001**
+Öppna din webbläsare: **http://localhost:3001**
 
-## Manuell Installation
+## Första inloggningen
 
-Om du föredrar manuell installation:
+När du öppnar Web-UI första gången:
 
-### Krav
-- Windows 10/11 eller Windows Server 2019/2022
-- Node.js 18.x eller senare
-- SteamCMD
-- Minst 20 GB ledigt diskutrymme
+1. **Hitta ditt Steam ID:**
+   - Gå till https://steamid.io/
+   - Logga in med Steam
+   - Kopiera din **steamID64** (format: 76561199XXXXXXXXX)
 
-### Steg-för-steg
+2. **Logga in:**
+   - Ange ditt Steam ID i login-formuläret
+   - Om ditt ID inte är auktoriserat, be en admin att lägga till dig
 
-1. Installera Node.js från https://nodejs.org/
+3. **För första användaren:**
+   - Editera `config/users.json` manuellt
+   - Byt standardanvändarens SteamID till ditt eget:
+   ```json
+   {
+     "users": [
+       {
+         "steamId": "DITT_STEAM_ID_HÄR",
+         "displayName": "Admin",
+         "role": "admin",
+         "addedAt": "2024-01-01T00:00:00Z"
+       }
+     ]
+   }
+   ```
 
-2. Klona repository:
-```bash
-git clone https://github.com/mkungen89/Arma-reforger-server.git
-cd Arma-reforger-server
+## Användarroller
+
+### Admin
+- Full åtkomst till alla funktioner
+- Kan hantera användare
+- Kan ändra all konfiguration
+- Kan starta/stoppa server
+- Kan hantera mods
+
+### GM (Game Master)
+- Kan starta/stoppa/restart server
+- Kan hantera mods
+- Kan se loggar
+- Kan INTE ändra konfiguration
+- Kan INTE hantera användare
+
+### User
+- Endast läsåtkomst
+- Kan se dashboard och status
+- Kan se loggar
+- Kan INTE göra några ändringar
+
+## Användarhantering
+
+### Lägga till användare (via Web-UI)
+
+1. Logga in som **Admin**
+2. Gå till **Users** i menyn
+3. Klicka **Add User**
+4. Ange användarens Steam ID
+5. Välj roll (Admin/GM/User)
+6. Klicka **Add User**
+
+### Lägga till användare (manuellt)
+
+Editera `config/users.json`:
+
+```json
+{
+  "users": [
+    {
+      "steamId": "76561199176944069",
+      "displayName": "Admin User",
+      "role": "admin",
+      "addedAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "steamId": "76561198XXXXXXXXX",
+      "displayName": "Game Master",
+      "role": "gm",
+      "addedAt": "2024-01-01T00:00:00Z"
+    }
+  ]
+}
 ```
 
-3. Installera backend dependencies:
-```bash
-npm install
-```
-
-4. Installera frontend dependencies:
-```bash
-cd frontend
-npm install
-cd ..
-```
-
-5. Installera SteamCMD manuellt eller kör:
-```powershell
-.\install.ps1
-```
-
-6. Starta servern:
-```bash
-npm start
-```
-
-## Användarguide
-
-### Starta Arma Reforger Server
-
-1. Öppna Web-UI (http://localhost:3001)
-2. Gå till **Server Control**
-3. Klicka på **Start Server**
-4. Servern startar nu och du kan se status i realtid
-
-### Lägga till Mods
-
-1. Gå till **Mod Manager**
-2. Klistra in Steam Workshop URL (t.ex. https://steamcommunity.com/sharedfiles/filedetails/?id=123456789)
-3. Klicka **Search**
-4. Granska mod-informationen och dependencies
-5. Klicka **Add Mod**
-6. Klicka **Install** för att ladda ner moden
-7. Aktivera moden med checkboxen
-
-**OBS:** Mod Manager kontrollerar automatiskt dependencies och varnar dig om något saknas!
-
-### Felsöka Problem
-
-1. Gå till **Diagnostics**
-2. Klicka **Run Diagnostics**
-3. Granska resultaten
-4. Om problem upptäcks, följ föreslagna lösningar
-5. Vissa problem kan fixas automatiskt med **Try Auto-Fix**
-
-### Uppdatera Servern
-
-1. Stoppa servern först (om den kör)
-2. Gå till **Server Control**
-3. Klicka **Update Server**
-4. Vänta tills uppdateringen är klar (följ i Logs)
+Starta om Web-UI efter ändring.
 
 ## Konfiguration
 
@@ -162,25 +252,66 @@ Standard portar:
 - **Game Server:** UDP 2001
 - **Web UI:** TCP 3001
 
-Du kan ändra dessa i **Configuration** sektionen.
+### Firewall (Ubuntu)
 
-### Firewall
+```bash
+# Tillåt Web UI
+sudo ufw allow 3001/tcp
 
-Installationsskriptet lägger automatiskt till firewall-regler. Om du installerade manuellt, öppna dessa portar:
+# Tillåt Game Server
+sudo ufw allow 2001/udp
+
+# Enable firewall
+sudo ufw enable
+```
+
+### Firewall (Windows)
+
+Installationsskriptet lägger automatiskt till regler. Manuellt:
 
 ```powershell
 New-NetFirewallRule -DisplayName "Arma Reforger Server" -Direction Inbound -Protocol UDP -LocalPort 2001 -Action Allow
 New-NetFirewallRule -DisplayName "Arma Reforger Web UI" -Direction Inbound -Protocol TCP -LocalPort 3001 -Action Allow
 ```
 
-### Port Forwarding
+### Reverse Proxy (Nginx) - Rekommenderat för produktion
 
-För att spelare ska kunna ansluta från internet, måste du port-forwarda följande i din router:
-- **UDP 2001** -> Din servers lokala IP
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Med SSL (Let's Encrypt):
+
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+```
 
 ## API Endpoints
 
-Web-UI kommunicerar med backend via följande API:
+### Authentication
+- `POST /api/auth/steam/login` - Login med Steam ID
+- `POST /api/auth/steam/verify` - Verifiera Steam OpenID
+- `GET /api/auth/me` - Hämta nuvarande användare
+- `POST /api/auth/logout` - Logga ut
+
+### User Management (Admin only)
+- `GET /api/users` - Lista alla användare
+- `POST /api/users` - Lägg till användare
+- `PUT /api/users/:steamId` - Uppdatera användarroll
+- `DELETE /api/users/:steamId` - Ta bort användare
 
 ### Server Management
 - `GET /api/status` - Hämta serverstatus
@@ -214,20 +345,15 @@ Web-UI kommunicerar med backend via följande API:
 
 ### Köra i utvecklingsläge
 
-Backend och frontend separat:
-
-Terminal 1 (Backend):
 ```bash
+# Backend
 npm run server
-```
 
-Terminal 2 (Frontend):
-```bash
-npm run client
-```
+# Frontend (ny terminal)
+cd frontend
+npm start
 
-Eller båda samtidigt:
-```bash
+# Eller båda samtidigt
 npm run dev
 ```
 
@@ -236,67 +362,114 @@ npm run dev
 ```
 Arma-Reforger-Server/
 ├── backend/
-│   ├── server.js          # Main backend server
-│   ├── modManager.js      # Mod management API
-│   └── diagnostics.js     # Diagnostics API
+│   ├── server.js          # Main server
+│   ├── auth.js            # Authentication
+│   ├── modManager.js      # Mod management
+│   └── diagnostics.js     # Diagnostics
 ├── frontend/
-│   ├── public/
-│   └── src/
-│       ├── components/    # React components
-│       ├── App.js
-│       └── index.js
-├── config/                # Configuration files
-├── install.ps1           # PowerShell installer
-├── quick-install.bat     # Quick install script
-├── start.bat             # Start script
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Login.js
+│   │   │   ├── UserManagement.js
+│   │   │   ├── Dashboard.js
+│   │   │   └── ...
+│   │   ├── App.js
+│   │   └── index.js
+│   └── package.json
+├── config/
+│   ├── server-config.json # Server config
+│   └── users.json         # Users database
+├── install-ubuntu.sh      # Ubuntu installer
+├── install.ps1            # Windows installer
 └── package.json
 ```
 
 ## Felsökning
 
+### Kan inte logga in
+
+1. Kontrollera att ditt Steam ID är i `config/users.json`
+2. Verifiera att backend är igång
+3. Kontrollera browser console för fel
+
+### Web-UI laddas inte
+
+**Ubuntu:**
+```bash
+sudo systemctl status arma-reforger-webui
+sudo journalctl -u arma-reforger-webui -n 50
+```
+
+**Windows:**
+```bash
+# Kontrollera om processen kör
+netstat -ano | findstr :3001
+```
+
 ### Servern startar inte
 
-1. Kontrollera att server-filerna är installerade korrekt
-2. Verifiera att port 2001 är ledig
-3. Kör diagnostik för att identifiera problemet
-4. Kontrollera logs för felmeddelanden
+1. Kör **Diagnostics** i Web-UI
+2. Kontrollera serverfiler finns
+3. Verifiera att port 2001 är ledig
+4. Se loggar i Web-UI
 
-### Kan inte ansluta till Web-UI
+## Säkerhet
 
-1. Kontrollera att backend är igång (`npm start`)
-2. Verifiera att port 3001 är ledig
-3. Testa med `http://localhost:3001` istället för IP-adress
-4. Kontrollera Windows Firewall
+### Best Practices
 
-### Mods laddas inte
+1. **Ändra default admin SteamID** direkt efter installation
+2. **Använd HTTPS** i produktion (Nginx + Let's Encrypt)
+3. **Håll Steam API key hemlig** - lägg aldrig i Git
+4. **Begränsa admin-åtkomst** - ge endast GM-roll när möjligt
+5. **Regelbundna uppdateringar** av både server och Web-UI
+6. **Firewall** - öppna endast nödvändiga portar
 
-1. Kontrollera att SteamCMD är installerat korrekt
-2. Verifiera att alla dependencies är installerade
-3. Kontrollera att du har tillräckligt diskutrymme
-4. Granska logs under installation
+### Steam API Key
+
+För att få användarnamn och avatarer från Steam:
+
+1. Gå till https://steamcommunity.com/dev/apikey
+2. Skapa en API-nyckel
+3. Lägg till i `config/server-config.json`:
+   ```json
+   {
+     "steamApiKey": "YOUR_KEY_HERE"
+   }
+   ```
+
+**OBS:** Lägg ALDRIG API-nyckeln i Git!
 
 ## Bidra
 
 Bidrag är välkomna! Skapa en pull request eller öppna ett issue.
 
+## Support
+
+- **GitHub Issues:** https://github.com/mkungen89/Arma-reforger-server/issues
+- **Server IP:** 45.67.15.187
+- **Documentation:** Se INSTALL.md för detaljerad installationsguide
+
 ## Licens
 
 MIT License - se LICENSE fil för detaljer
 
-## Support
+## Changelog
 
-- **Issues:** https://github.com/mkungen89/Arma-reforger-server/issues
-- **Discord:** [Din Discord server]
-- **Wiki:** [Din wiki]
+### Version 2.0.0
+- ✅ Steam authentication
+- ✅ Rollbaserad åtkomstkontroll (Admin/GM/User)
+- ✅ Användarhantering
+- ✅ Ubuntu/Linux support
+- ✅ Systemd service
+- ✅ Steam API integration
 
-## Tack till
-
-- Bohemia Interactive för Arma Reforger
-- Node.js och React communities
-- Alla bidragsgivare
+### Version 1.0.0
+- ✅ Grundläggande serverhantering
+- ✅ Mod manager med dependency-kontroll
+- ✅ Diagnostik och monitoring
+- ✅ Web-UI
+- ✅ Windows support
 
 ---
-
-**Server IP:** 45.67.15.187
 
 Made with ❤️ for the Arma Reforger community
