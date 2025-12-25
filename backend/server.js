@@ -61,15 +61,69 @@ function loadConfig() {
         if (fs.existsSync(configPath)) {
             config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         } else {
+            // Default configuration with all Arma Reforger settings
             config = {
+                // Installation paths
                 serverPath: 'C:\\ArmaReforgerServer',
                 steamCmdPath: 'C:\\SteamCMD',
-                webUIPort: 3001,
-                serverPort: 2001,
+
+                // Basic settings
                 serverName: 'My Arma Reforger Server',
                 maxPlayers: 32,
                 password: '',
-                adminPassword: 'admin123'
+                adminPassword: 'admin123',
+                visible: true,
+
+                // Network settings
+                webUIPort: 3001,
+                serverPort: 2001,
+                publicPort: 2001,
+
+                // Steam Query (A2S)
+                a2sEnabled: true,
+                a2sPort: 17777,
+
+                // Platform support
+                crossPlatform: true,
+
+                // Game properties - View distances
+                serverMaxViewDistance: 2500,
+                networkViewDistance: 1500,
+                serverMinGrassDistance: 50,
+
+                // Game properties - Gameplay
+                battlEye: true,
+                fastValidation: true,
+                disableThirdPerson: false,
+
+                // Voice chat (VON)
+                vonDisableUI: false,
+                vonDisableDirectSpeechUI: false,
+                vonCanTransmitCrossFaction: false,
+
+                // RCON
+                rconEnabled: false,
+                rconPort: 19999,
+                rconPassword: '',
+                rconMaxClients: 5,
+                rconPermission: 'admin',
+
+                // AI settings
+                disableAI: false,
+                aiLimit: -1,
+
+                // Player & Queue
+                playerSaveTime: 300,
+                joinQueueMaxSize: 50,
+                slotReservationTimeout: 30,
+
+                // System options
+                disableCrashReporter: false,
+                disableServerShutdown: false,
+                lobbyPlayerSynchronise: false,
+
+                // Steam API
+                steamApiKey: ''
             };
             saveConfig();
         }

@@ -501,6 +501,44 @@ MIT License - se LICENSE fil för detaljer
 
 ## Changelog
 
+### Version 3.2.0 (2025-12-25) ⚙️
+**Complete Server Configuration System**
+
+#### New Features:
+- ✅ **Comprehensive Configuration UI**
+  - 5 organized tabs: Basic, Network, Game Properties, RCON, Advanced
+  - All Arma Reforger config.json parameters
+  - Real-time validation and hints
+  - Unsaved changes tracking
+
+- ✅ **Game Properties Configuration**
+  - View distance settings (server max, network, grass)
+  - BattlEye anti-cheat toggle
+  - Fast validation option
+  - Third-person view control
+  - Voice chat (VON) settings
+
+- ✅ **RCON Support**
+  - Enable/disable remote console
+  - Port and password configuration
+  - Max clients and permission levels
+  - Security warnings
+
+- ✅ **Advanced Settings**
+  - AI configuration (enable/disable, limits)
+  - Player save intervals
+  - Join queue management
+  - Slot reservation timeouts
+  - System options (crash reporter, shutdown control)
+  - Cross-platform play toggle
+
+#### Documentation:
+- Integrated help links to official Arma Reforger docs
+- Inline hints for every setting
+- Recommended values and ranges
+
+---
+
 ### Version 3.1.0 (2025-12-25) 🔄
 **Auto-Update System & Node.js v20 Support**
 
