@@ -178,7 +178,21 @@ fi
 if is_tty && [ "$ENABLE_FLUTE" = "1" ] && [ -z "$FLUTE_DOMAIN" ]; then
   echo ""
   echo "Flute CMS will be installed as the ONLY UI."
-  FLUTE_DOMAIN="$(prompt 'Flute site domain (e.g. site.example.com)')"
+  echo ""
+  echo "NOTE: You can use either a domain name OR your VPS IP address."
+  echo "  - Domain name: Enables HTTPS/SSL (recommended)"
+  echo "  - IP address: HTTP only (no SSL, but works fine for testing)"
+  echo ""
+  FLUTE_DOMAIN="$(prompt 'Domain or IP address (e.g. arma.example.com or 192.168.1.100)')"
+
+  # Auto-detect if it's an IP address and disable SSL
+  if [[ "$FLUTE_DOMAIN" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    echo ""
+    echo "Detected IP address: $FLUTE_DOMAIN"
+    echo "SSL will be DISABLED (Let's Encrypt requires a domain name)"
+    ENABLE_SSL=0
+  fi
+
   if [ -z "$FLUTE_ADMIN_EMAIL" ]; then
     FLUTE_ADMIN_EMAIL="$(prompt 'Flute admin email (for future setup)' '')"
   fi

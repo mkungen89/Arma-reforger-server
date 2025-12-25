@@ -2,9 +2,42 @@
 
 En komplett lösning för att hantera din Arma Reforger dedikerade server med **Flute CMS** som UI, Steam authentication (för server-control), och avancerade automatiseringsfunktioner.
 
-![Version](https://img.shields.io/badge/version-3.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.5.1-blue.svg)
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
+
+---
+
+## 🚀 Snabbstart
+
+**Vill du installera på VPS på 15 minuter?**
+
+➡️ **[QUICKSTART.md](./QUICKSTART.md)** - Steg-för-steg guide med exakta kommandon!
+
+---
+
+## ⭐ NYTT I VERSION 3.5
+
+### 🗄️ Supabase Database Support
+- **Cloud-hosted PostgreSQL** som alternativ till lokal databas
+- Automatisk connection validation under installation
+- Perfekt för små/medium servrar (gratis tier: 500MB)
+- Inget underhåll av lokal databasserver
+- Automatiska backups och point-in-time recovery
+
+### 📚 Komplett Dokumentation
+- **QUICKSTART.md** - 15-minuters installationsguide
+- **DEPLOYMENT.md** - Fullständig deployment-guide
+- **TESTING.md** - Manual testning och QA
+- **SECURITY.md** - Production hardening
+- **UPDATES.md** - Update och rollback procedures
+
+### ✅ Production-Ready
+- Automated tests (Jest + GitHub Actions CI/CD)
+- Session persistence (fil-baserad)
+- Rate limiting + CORS security
+- Audit logging för admin actions
+- systemd service med auto-restart
 
 ## ⭐ NYTT I VERSION 3.0
 
