@@ -556,7 +556,8 @@ try {
 }
 
 // Start HTTP server
-const server = app.listen(PORT, '0.0.0.0', () => {
+const LISTEN_HOST = process.env.LISTEN_HOST || '0.0.0.0';
+const server = app.listen(PORT, LISTEN_HOST, () => {
     console.log(`Arma Reforger Server Manager running on port ${PORT}`);
     console.log(`Web UI: http://localhost:${PORT}`);
     console.log(`Battlelog: http://localhost:${PORT}/battlelog (PUBLIC)`);

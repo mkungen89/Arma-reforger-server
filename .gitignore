@@ -13,6 +13,7 @@ config/internal-api-key.json
 config/users.json
 config/discord-config.json
 config/scheduled-tasks.json
+config/battlelog.json
 
 # Local assistant/IDE state
 .claude/settings.local.json

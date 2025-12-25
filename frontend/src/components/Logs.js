@@ -11,7 +11,7 @@ function Logs() {
     loadLogs();
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:${window.location.port || 3001}`;
+    const wsUrl = `${protocol}//${window.location.host}`;
     const websocket = new WebSocket(wsUrl);
 
     websocket.onmessage = (event) => {

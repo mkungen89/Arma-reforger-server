@@ -19,27 +19,7 @@ import ModCollections from './components/ModCollections';
 import ServerBrowser from './components/ServerBrowser';
 import { ToastProvider } from './components/ToastProvider';
 import EnvironmentBanner from './components/EnvironmentBanner';
-
-// Configure axios defaults
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('authToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
-      window.location.reload();
-    }
-    return Promise.reject(error);
-  }
-);
+import PublicBattlelog from './PublicBattlelog';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -48,9 +28,39 @@ function App() {
   const [serverStatus, setServerStatus] = useState('stopped');
   const wsRef = useRef(null);
   const authRef = useRef(false);
+  const axiosConfiguredRef = useRef(false);
 
   useEffect(() => {
     checkAuth();
+  }, []);
+
+  useEffect(() => {
+    if (axiosConfiguredRef.current) return;
+    axiosConfiguredRef.current = true;
+
+    axios.interceptors.request.use((config) => {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
+    axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        // Never force-refresh on public battlelog view
+        if (window.location.pathname.startsWith('/battlelog')) {
+          return Promise.reject(error);
+        }
+        if (error.response?.status === 401) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('user');
+          window.location.reload();
+        }
+        return Promise.reject(error);
+      }
+    );
   }, []);
 
   useEffect(() => {
@@ -93,7 +103,8 @@ function App() {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:${window.location.port || 3001}`;
+    // Use current host (supports nginx/https without forcing :3001)
+    const wsUrl = `${protocol}//${window.location.host}`;
 
     const websocket = new WebSocket(wsUrl);
 
@@ -176,6 +187,11 @@ function App() {
         <p>Loading...</p>
       </div>
     );
+  }
+
+  // Public battlelog must be accessible without login
+  if (!isAuthenticated && window.location.pathname.startsWith('/battlelog')) {
+    return <PublicBattlelog />;
   }
 
   if (!isAuthenticated) {

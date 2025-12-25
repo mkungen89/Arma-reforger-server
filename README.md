@@ -507,6 +507,34 @@ Du vill att **Battlelog ska vara publik**, men **panelen/Web-UI ska inte exponer
 - **Battlelog (public):** proxy_pass till appen men begränsa requests/connections.
 - **Panel (private):** kräver auth/IP allow, och kan även bindas till localhost och nås via SSH tunnel.
 
+### Installer: Nginx + SSL (valfritt)
+
+Du kan låta `install-ubuntu.sh` sätta upp **Nginx reverse proxy** så att:
+- Battlelog är publik på en domän
+- Panelen är privat på en annan domän (Basic Auth och/eller IP allowlist)
+
+Exempel (rekommenderat):
+
+```bash
+sudo \
+  ADMIN_STEAMID=7656119XXXXXXXXXX \
+  ENABLE_NGINX=1 \
+  ENABLE_SSL=1 \
+  CERTBOT_EMAIL=you@example.com \
+  BATTLELOG_DOMAIN=battlelog.example.com \
+  PANEL_DOMAIN=panel.example.com \
+  PANEL_BASIC_AUTH=1 \
+  bash install-ubuntu.sh
+```
+
+Viktiga env vars:
+- **`ENABLE_NGINX=1`**: installerar och konfigurerar Nginx
+- **`ENABLE_SSL=1`** + **`CERTBOT_EMAIL`**: kör certbot (Let’s Encrypt) och tvingar redirect till HTTPS
+- **`BATTLELOG_DOMAIN`**: publik battlelog (begränsad till `/battlelog`, `/static/*` och battlelog-API)
+- **`PANEL_DOMAIN`**: privat panel (hela appen), skyddad
+- **`PANEL_BASIC_AUTH=1`**: skydda panel med Basic Auth (lösen kan genereras automatiskt)
+- **`PANEL_ALLOW_IPS`**: kommaseparerad allowlist, t.ex. `PANEL_ALLOW_IPS="1.2.3.4,5.6.7.8"`
+
 ### Steam API Key
 
 För att få användarnamn och avatarer från Steam:

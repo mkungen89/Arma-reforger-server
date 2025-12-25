@@ -27,6 +27,16 @@ INSTALL_USER="${INSTALL_USER:-arma}"
 WEB_UI_PORT="${WEB_UI_PORT:-3001}"
 SERVER_PORT="${SERVER_PORT:-2001}"
 ADMIN_STEAMID="${ADMIN_STEAMID:-}"
+ENABLE_NGINX="${ENABLE_NGINX:-0}"
+ENABLE_SSL="${ENABLE_SSL:-0}"
+BATTLELOG_DOMAIN="${BATTLELOG_DOMAIN:-}"
+PANEL_DOMAIN="${PANEL_DOMAIN:-}"
+CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
+PANEL_BASIC_AUTH="${PANEL_BASIC_AUTH:-0}"
+PANEL_AUTH_USER="${PANEL_AUTH_USER:-admin}"
+PANEL_AUTH_PASS="${PANEL_AUTH_PASS:-}"
+PANEL_ALLOW_IPS="${PANEL_ALLOW_IPS:-}"
+PUBLIC_API_RPM="${PUBLIC_API_RPM:-300}"
 
 if [ -z "$ADMIN_STEAMID" ]; then
     echo "ERROR: ADMIN_STEAMID is required for a secure installation."
@@ -44,6 +54,7 @@ echo "  Web UI: $WEB_UI_PATH"
 echo "  User: $INSTALL_USER"
   echo "  Web UI Port: $WEB_UI_PORT"
   echo "  Server Port: $SERVER_PORT"
+  echo "  Nginx: $ENABLE_NGINX (SSL: $ENABLE_SSL)"
 echo ""
 
 # Update system
@@ -206,12 +217,26 @@ chown -R "$INSTALL_USER:$INSTALL_USER" "$WEB_UI_PATH/config"
 echo "Configuring firewall..."
 if command -v ufw &> /dev/null; then
     ufw allow "${SERVER_PORT}/udp" comment 'Arma Reforger Server' || true
-    ufw allow "${WEB_UI_PORT}/tcp" comment 'Arma Reforger Web UI' || true
+    # Only expose the Node port directly when NOT using nginx.
+    # When nginx is enabled we bind Node to 127.0.0.1 and expose only 80/443.
+    if [ "$ENABLE_NGINX" != "1" ]; then
+        ufw allow "${WEB_UI_PORT}/tcp" comment 'Arma Reforger Web UI' || true
+    fi
+    if [ "$ENABLE_NGINX" = "1" ]; then
+        ufw allow 80/tcp comment 'HTTP' || true
+        ufw allow 443/tcp comment 'HTTPS' || true
+    fi
     echo "Firewall rules added"
 fi
 
 # Create systemd service
 echo "Creating systemd service..."
+LISTEN_HOST_ENV="0.0.0.0"
+TRUST_PROXY_ENV="0"
+if [ "$ENABLE_NGINX" = "1" ]; then
+    LISTEN_HOST_ENV="127.0.0.1"
+    TRUST_PROXY_ENV="1"
+fi
 cat > /etc/systemd/system/arma-reforger-webui.service <<EOF
 [Unit]
 Description=Arma Reforger Server Manager Web UI
@@ -223,6 +248,9 @@ User=$INSTALL_USER
 WorkingDirectory=$WEB_UI_PATH
 Environment=NODE_ENV=production
 Environment=PORT=$WEB_UI_PORT
+Environment=LISTEN_HOST=$LISTEN_HOST_ENV
+Environment=TRUST_PROXY=$TRUST_PROXY_ENV
+Environment=PUBLIC_API_RPM=$PUBLIC_API_RPM
 ExecStart=/usr/bin/node $WEB_UI_PATH/backend/server.js
 Restart=always
 RestartSec=10
@@ -237,6 +265,150 @@ EOF
 systemctl daemon-reload
 systemctl enable arma-reforger-webui.service
 systemctl restart arma-reforger-webui.service
+
+# Optional: Nginx reverse proxy + HTTPS
+if [ "$ENABLE_NGINX" = "1" ]; then
+    echo "Setting up Nginx reverse proxy..."
+    apt-get install -y nginx apache2-utils
+
+    # Rate limiting zones (http context)
+    cat > /etc/nginx/conf.d/arma-reforger-limits.conf <<'EOF'
+limit_req_zone $binary_remote_addr zone=public_api:10m rate=5r/s;
+limit_conn_zone $binary_remote_addr zone=addr:10m;
+EOF
+
+    # Panel basic auth (optional)
+    AUTH_SNIPPET=""
+    if [ "$PANEL_BASIC_AUTH" = "1" ]; then
+        if [ -z "$PANEL_AUTH_PASS" ]; then
+            PANEL_AUTH_PASS="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+            echo "Generated PANEL_AUTH_PASS: $PANEL_AUTH_PASS"
+        fi
+        htpasswd -bc /etc/nginx/.htpasswd_arma_reforger_panel "$PANEL_AUTH_USER" "$PANEL_AUTH_PASS"
+        AUTH_SNIPPET="$(printf 'auth_basic \"Restricted\";\n        auth_basic_user_file /etc/nginx/.htpasswd_arma_reforger_panel;')"
+    fi
+
+    # IP allowlist (optional)
+    IP_SNIPPET=""
+    if [ -n "$PANEL_ALLOW_IPS" ]; then
+        # Build: allow <ip>; ... then deny all;
+        IP_SNIPPET=""
+        IFS=',' read -ra IPS <<< "$PANEL_ALLOW_IPS"
+        for ip in "${IPS[@]}"; do
+            ip_trimmed="$(echo "$ip" | xargs)"
+            if [ -n "$ip_trimmed" ]; then
+                IP_SNIPPET+=$(printf 'allow %s;\n        ' "$ip_trimmed")
+            fi
+        done
+        IP_SNIPPET+="deny all;"
+    fi
+
+    # Battlelog public vhost (path-restricted)
+    if [ -n "$BATTLELOG_DOMAIN" ]; then
+        cat > /etc/nginx/sites-available/arma-reforger-battlelog <<EOF
+server {
+    listen 80;
+    server_name $BATTLELOG_DOMAIN;
+
+    # Basic connection limits
+    limit_conn addr 50;
+
+    location = / { return 302 /battlelog; }
+
+    # Public SPA + assets
+    location /battlelog {
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://127.0.0.1:$WEB_UI_PORT;
+    }
+
+    location /static/ {
+        proxy_pass http://127.0.0.1:$WEB_UI_PORT;
+    }
+    location = /asset-manifest.json { proxy_pass http://127.0.0.1:$WEB_UI_PORT; }
+    location = /manifest.json { proxy_pass http://127.0.0.1:$WEB_UI_PORT; }
+    location = /favicon.ico { proxy_pass http://127.0.0.1:$WEB_UI_PORT; }
+
+    # Public APIs (rate limited)
+    location /api/battlelog {
+        limit_req zone=public_api burst=60 nodelay;
+        proxy_pass http://127.0.0.1:$WEB_UI_PORT;
+    }
+    location /api/battle-reports {
+        limit_req zone=public_api burst=60 nodelay;
+        proxy_pass http://127.0.0.1:$WEB_UI_PORT;
+    }
+    location /api/achievements {
+        limit_req zone=public_api burst=60 nodelay;
+        proxy_pass http://127.0.0.1:$WEB_UI_PORT;
+    }
+
+    # Everything else is blocked on the public hostname
+    location / { return 404; }
+}
+EOF
+        ln -sf /etc/nginx/sites-available/arma-reforger-battlelog /etc/nginx/sites-enabled/arma-reforger-battlelog
+    fi
+
+    # Private panel vhost (protected)
+    if [ -n "$PANEL_DOMAIN" ]; then
+        cat > /etc/nginx/sites-available/arma-reforger-panel <<EOF
+server {
+    listen 80;
+    server_name $PANEL_DOMAIN;
+
+    limit_conn addr 50;
+
+    location / {
+        ${IP_SNIPPET}
+        ${AUTH_SNIPPET}
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://127.0.0.1:$WEB_UI_PORT;
+    }
+}
+EOF
+        ln -sf /etc/nginx/sites-available/arma-reforger-panel /etc/nginx/sites-enabled/arma-reforger-panel
+    fi
+
+    # Remove default site if present
+    rm -f /etc/nginx/sites-enabled/default || true
+
+    nginx -t
+    systemctl enable nginx
+    systemctl restart nginx
+
+    if [ "$ENABLE_SSL" = "1" ]; then
+        if [ -z "$CERTBOT_EMAIL" ]; then
+            echo "WARNING: ENABLE_SSL=1 but CERTBOT_EMAIL is empty. Skipping certbot."
+        else
+            echo "Requesting Let's Encrypt certificates via certbot..."
+            apt-get install -y certbot python3-certbot-nginx
+
+            DOMAINS=()
+            if [ -n "$BATTLELOG_DOMAIN" ]; then DOMAINS+=("-d" "$BATTLELOG_DOMAIN"); fi
+            if [ -n "$PANEL_DOMAIN" ]; then DOMAINS+=("-d" "$PANEL_DOMAIN"); fi
+
+            if [ ${#DOMAINS[@]} -gt 0 ]; then
+                certbot --nginx --non-interactive --agree-tos -m "$CERTBOT_EMAIL" "${DOMAINS[@]}" --redirect || \
+                    echo "WARNING: certbot failed (check DNS points to this server and ports 80/443 are open)."
+            else
+                echo "WARNING: No domains provided for SSL. Set BATTLELOG_DOMAIN and/or PANEL_DOMAIN."
+            fi
+        fi
+    fi
+fi
 
 echo ""
 echo "====================================="
@@ -263,3 +435,17 @@ echo "  http://YOUR_SERVER_IP:$WEB_UI_PORT"
 echo ""
 echo "Admin SteamID: $ADMIN_STEAMID"
 echo ""
+
+if [ "$ENABLE_NGINX" = "1" ]; then
+    echo "Nginx is enabled."
+    if [ -n "$BATTLELOG_DOMAIN" ]; then
+        echo "Public Battlelog:  http://${BATTLELOG_DOMAIN}/battlelog"
+    fi
+    if [ -n "$PANEL_DOMAIN" ]; then
+        echo "Private Panel:     http://${PANEL_DOMAIN}/"
+    fi
+    if [ "$PANEL_BASIC_AUTH" = "1" ]; then
+        echo "Panel Basic Auth user: $PANEL_AUTH_USER"
+        echo "Panel Basic Auth pass: $PANEL_AUTH_PASS"
+    fi
+fi
