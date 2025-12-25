@@ -4,6 +4,7 @@ const schedule = require('node-schedule');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { getInternalApiKey } = require('./internalApiKey');
 
 // Tasks storage
 const tasksFile = path.join(__dirname, '../config/scheduled-tasks.json');
@@ -210,9 +211,11 @@ async function executeServerRestart(task, execution) {
 async function executeServerUpdate(task, execution) {
   execution.output = 'Starting server update...';
 
+  const internalHeaders = { headers: { 'x-internal-api-key': getInternalApiKey() } };
+
   // Stop server first
   try {
-    await axios.post('http://localhost:3001/api/server/stop');
+    await axios.post('http://localhost:3001/api/server/stop', null, internalHeaders);
     execution.output += '\nServer stopped';
   } catch (error) {
     execution.output += '\nServer was not running';
@@ -223,7 +226,7 @@ async function executeServerUpdate(task, execution) {
 
   // Run update
   execution.output += '\nRunning SteamCMD update...';
-  await axios.post('http://localhost:3001/api/server/update');
+  await axios.post('http://localhost:3001/api/server/update', null, internalHeaders);
 
   // Wait for update to complete (this is simplified - in reality you'd monitor the process)
   await new Promise(resolve => setTimeout(resolve, 60000));
@@ -231,7 +234,7 @@ async function executeServerUpdate(task, execution) {
   // Start server if configured
   if (task.config?.autoStart !== false) {
     execution.output += '\nStarting server...';
-    await axios.post('http://localhost:3001/api/server/start');
+    await axios.post('http://localhost:3001/api/server/start', null, internalHeaders);
   }
 
   execution.output += '\nUpdate completed';

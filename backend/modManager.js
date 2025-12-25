@@ -4,10 +4,14 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const workshopApi = require('./workshopApi');
+const { resolveSteamCmdExecutable, isWindows, looksLikeWindowsPath } = require('./platform');
+const { requireRole } = require('./auth');
 
 // Mod database (persisted to file)
 const modDbPath = path.join(__dirname, '../config/mods.json');
 let modsDatabase = { installed: [], available: [] };
+
+const METADATA_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // Load mods database
 function loadModsDb() {
@@ -23,6 +27,10 @@ function loadModsDb() {
 // Save mods database
 function saveModsDb() {
     try {
+        const configDir = path.dirname(modDbPath);
+        if (!fs.existsSync(configDir)) {
+            fs.mkdirSync(configDir, { recursive: true });
+        }
         fs.writeFileSync(modDbPath, JSON.stringify(modsDatabase, null, 2));
     } catch (error) {
         console.error('Error saving mods database:', error);
@@ -53,6 +61,7 @@ async function fetchModInfo(workshopId) {
     try {
         // Use Workshop API for Arma Reforger mods
         const modInfo = await workshopApi.getModDetails(workshopId);
+        modInfo.lastFetchedAt = new Date().toISOString();
         return modInfo;
     } catch (error) {
         console.error(`Error fetching mod info for ${workshopId}:`, error.message);
@@ -64,6 +73,35 @@ async function fetchModInfo(workshopId) {
             status: 'error'
         };
     }
+}
+
+function metadataIsStale(mod) {
+    const ts = mod?.lastFetchedAt ? Date.parse(mod.lastFetchedAt) : 0;
+    if (!ts) return true;
+    return Date.now() - ts > METADATA_TTL_MS;
+}
+
+function mergeMetadata(target, fresh) {
+    const fields = [
+        'name',
+        'author',
+        'description',
+        'version',
+        'size',
+        'fileSizeBytes',
+        'gameVersion',
+        'thumbnailUrl',
+        'downloads',
+        'rating',
+        'updated',
+        'dependencies'
+    ];
+    for (const f of fields) {
+        if (fresh[f] !== undefined && fresh[f] !== null && fresh[f] !== '') {
+            target[f] = fresh[f];
+        }
+    }
+    target.lastFetchedAt = new Date().toISOString();
 }
 
 // Check if all dependencies are satisfied
@@ -136,8 +174,12 @@ function validateModConfiguration() {
 // Get all mods
 router.get('/mods', (req, res) => {
     const validation = validateModConfiguration();
+    const installed = modsDatabase.installed.map((m) => ({
+        ...m,
+        metadataStale: metadataIsStale(m)
+    }));
     res.json({
-        installed: modsDatabase.installed,
+        installed,
         available: modsDatabase.available,
         validation
     });
@@ -164,6 +206,44 @@ router.get('/mods/search', async (req, res) => {
     }
 });
 
+// Refresh metadata for a single mod (admin/gm)
+router.post('/mods/:id/refresh', requireRole(['admin', 'gm']), async (req, res) => {
+    const { id } = req.params;
+    const mod = modsDatabase.installed.find(m => m.id === id);
+    if (!mod) return res.status(404).json({ error: 'Mod not found' });
+
+    try {
+        const fresh = await fetchModInfo(id);
+        mergeMetadata(mod, fresh);
+        saveModsDb();
+        return res.json({ success: true, mod: { ...mod, metadataStale: metadataIsStale(mod) } });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+// Refresh metadata for all installed mods (admin/gm)
+router.post('/mods/refresh', requireRole(['admin', 'gm']), async (req, res) => {
+    const results = [];
+    let refreshed = 0;
+    let failed = 0;
+
+    for (const mod of modsDatabase.installed) {
+        try {
+            const fresh = await fetchModInfo(mod.id);
+            mergeMetadata(mod, fresh);
+            refreshed += 1;
+            results.push({ id: mod.id, ok: true });
+        } catch (e) {
+            failed += 1;
+            results.push({ id: mod.id, ok: false, error: e.message });
+        }
+    }
+
+    saveModsDb();
+    return res.json({ success: true, refreshed, failed, results });
+});
+
 // Get full dependency tree for a mod
 router.get('/mods/:id/dependencies', async (req, res) => {
     const { id } = req.params;
@@ -183,7 +263,7 @@ router.get('/mods/:id/dependencies', async (req, res) => {
 });
 
 // Add mod to available list
-router.post('/mods/add', async (req, res) => {
+router.post('/mods/add', requireRole(['admin', 'gm']), async (req, res) => {
     const { workshopId, url, withDependencies } = req.body;
 
     let id = workshopId;
@@ -238,13 +318,26 @@ router.post('/mods/add', async (req, res) => {
 });
 
 // Download/install mod
-router.post('/mods/:id/install', async (req, res) => {
+router.post('/mods/:id/install', requireRole(['admin', 'gm']), async (req, res) => {
     const { id } = req.params;
     const configPath = path.join(__dirname, '../config/server-config.json');
 
     try {
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        const steamCmd = config.steamCmdPath || '/usr/games/steamcmd';
+        if (!isWindows() && looksLikeWindowsPath(config.steamCmdPath)) {
+            return res.status(400).json({
+                error: 'SteamCMD path looks like a Windows path, but this process is running on Linux.',
+                suggestion: 'For Docker/Linux, set steamCmdPath to /usr/games/steamcmd (or a directory containing steamcmd).',
+                steamCmdPath: config.steamCmdPath
+            });
+        }
+        const steamCmd = resolveSteamCmdExecutable(config.steamCmdPath) || config.steamCmdPath || '/usr/games/steamcmd';
+        if (!steamCmd || !fs.existsSync(steamCmd)) {
+            return res.status(400).json({
+                error: 'SteamCMD not found - cannot download mods',
+                path: steamCmd || null
+            });
+        }
 
         const mod = modsDatabase.installed.find(m => m.id === id);
         if (!mod) {
@@ -295,7 +388,7 @@ router.post('/mods/:id/install', async (req, res) => {
 });
 
 // Enable/disable mod
-router.post('/mods/:id/toggle', (req, res) => {
+router.post('/mods/:id/toggle', requireRole(['admin', 'gm']), (req, res) => {
     const { id } = req.params;
     const { enabled } = req.body;
 
@@ -332,7 +425,7 @@ router.post('/mods/:id/toggle', (req, res) => {
 });
 
 // Remove mod
-router.delete('/mods/:id', (req, res) => {
+router.delete('/mods/:id', requireRole(['admin', 'gm']), (req, res) => {
     const { id } = req.params;
 
     const index = modsDatabase.installed.findIndex(m => m.id === id);

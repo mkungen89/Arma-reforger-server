@@ -6,7 +6,6 @@ function Logs() {
   const [filter, setFilter] = useState('all');
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef(null);
-  const [ws, setWs] = useState(null);
 
   useEffect(() => {
     loadLogs();
@@ -22,8 +21,6 @@ function Logs() {
         setLogs((prev) => [...prev, data.data]);
       }
     };
-
-    setWs(websocket);
 
     return () => {
       websocket.close();

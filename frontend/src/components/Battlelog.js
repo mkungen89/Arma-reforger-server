@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './Battlelog.css';
 
@@ -14,19 +14,16 @@ function Battlelog() {
   const [sortBy, setSortBy] = useState('score');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadLiveFeed, 5000); // Update feed every 5 seconds
-    return () => clearInterval(interval);
+  const loadLiveFeed = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/battlelog/feed?limit=30');
+      setLiveFeed(response.data);
+    } catch (error) {
+      console.error('Error loading live feed:', error);
+    }
   }, []);
 
-  useEffect(() => {
-    if (activeTab === 'leaderboard') {
-      loadLeaderboard();
-    }
-  }, [sortBy, activeTab]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [overviewRes, feedRes, matchesRes] = await Promise.all([
         axios.get('/api/battlelog/overview'),
@@ -42,34 +39,37 @@ function Battlelog() {
       console.error('Error loading battlelog data:', error);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadLiveFeed = async () => {
-    try {
-      const response = await axios.get('/api/battlelog/feed?limit=30');
-      setLiveFeed(response.data);
-    } catch (error) {
-      console.error('Error loading live feed:', error);
-    }
-  };
-
-  const loadLeaderboard = async () => {
+  const loadLeaderboard = useCallback(async () => {
     try {
       const response = await axios.get(`/api/battlelog/leaderboard?sortBy=${sortBy}&limit=100`);
       setLeaderboard(response.data);
     } catch (error) {
       console.error('Error loading leaderboard:', error);
     }
-  };
+  }, [sortBy]);
 
-  const handleSearch = async () => {
-    if (!searchQuery || searchQuery.length < 2) {
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadLiveFeed, 5000); // Update feed every 5 seconds
+    return () => clearInterval(interval);
+  }, [loadData, loadLiveFeed]);
+
+  useEffect(() => {
+    if (activeTab === 'leaderboard') {
+      loadLeaderboard();
+    }
+  }, [activeTab, loadLeaderboard]);
+
+  const handleSearch = async (query) => {
+    if (!query || query.length < 2) {
       setSearchResults([]);
       return;
     }
 
     try {
-      const response = await axios.get(`/api/battlelog/search?q=${searchQuery}`);
+      const response = await axios.get(`/api/battlelog/search?q=${encodeURIComponent(query)}`);
       setSearchResults(response.data);
     } catch (error) {
       console.error('Error searching:', error);
@@ -153,8 +153,9 @@ function Battlelog() {
             type="text"
             value={searchQuery}
             onChange={(e) => {
-              setSearchQuery(e.target.value);
-              handleSearch();
+              const next = e.target.value;
+              setSearchQuery(next);
+              handleSearch(next);
             }}
             placeholder="Search players..."
             className="search-input"

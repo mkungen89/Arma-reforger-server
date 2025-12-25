@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
@@ -17,6 +17,8 @@ import BackupManager from './components/BackupManager';
 import DiscordSettings from './components/DiscordSettings';
 import ModCollections from './components/ModCollections';
 import ServerBrowser from './components/ServerBrowser';
+import { ToastProvider } from './components/ToastProvider';
+import EnvironmentBanner from './components/EnvironmentBanner';
 
 // Configure axios defaults
 axios.interceptors.request.use((config) => {
@@ -44,16 +46,15 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [serverStatus, setServerStatus] = useState('stopped');
-  const [ws, setWs] = useState(null);
+  const wsRef = useRef(null);
+  const authRef = useRef(false);
 
   useEffect(() => {
     checkAuth();
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      initWebSocket();
-    }
+    authRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
   const checkAuth = async () => {
@@ -80,7 +81,17 @@ function App() {
     setLoading(false);
   };
 
-  const initWebSocket = () => {
+  const initWebSocket = useCallback(() => {
+    // Close any existing socket first
+    if (wsRef.current) {
+      try {
+        wsRef.current.close();
+      } catch (_) {
+        // ignore
+      }
+      wsRef.current = null;
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.hostname}:${window.location.port || 3001}`;
 
@@ -105,18 +116,31 @@ function App() {
     websocket.onclose = () => {
       console.log('WebSocket disconnected');
       setTimeout(() => {
-        if (isAuthenticated) {
+        if (authRef.current) {
           initWebSocket();
         }
       }, 5000);
     };
 
-    setWs(websocket);
+    wsRef.current = websocket;
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    initWebSocket();
 
     return () => {
-      websocket.close();
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch (_) {
+          // ignore
+        }
+        wsRef.current = null;
+      }
     };
-  };
+  }, [isAuthenticated, initWebSocket]);
 
   const handleLoginSuccess = (userData, token) => {
     setUser(userData);
@@ -135,8 +159,13 @@ function App() {
     setIsAuthenticated(false);
     setUser(null);
 
-    if (ws) {
-      ws.close();
+    if (wsRef.current) {
+      try {
+        wsRef.current.close();
+      } catch (_) {
+        // ignore
+      }
+      wsRef.current = null;
     }
   };
 
@@ -155,6 +184,7 @@ function App() {
 
   return (
     <Router>
+      <ToastProvider>
       <div className="App">
         <nav className="sidebar">
           <div className="sidebar-header">
@@ -270,6 +300,7 @@ function App() {
         </nav>
 
         <main className="main-content">
+          <EnvironmentBanner />
           <Routes>
             <Route path="/" element={<Dashboard serverStatus={serverStatus} />} />
             <Route path="/server-browser" element={<ServerBrowser />} />
@@ -293,6 +324,7 @@ function App() {
           </Routes>
         </main>
       </div>
+      </ToastProvider>
     </Router>
   );
 }

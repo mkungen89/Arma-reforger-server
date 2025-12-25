@@ -1,5 +1,23 @@
 # Installationsguide - Arma Reforger Server Manager
 
+## Docker Desktop (för test)
+
+Kör **Web-UI + API** i Docker (prod-build) och spara `config/` + `backups/` lokalt.
+
+```bash
+docker compose up --build
+```
+
+Öppna: **http://localhost:3001**
+
+Stoppa:
+
+```bash
+docker compose down
+```
+
+**OBS (Windows host):** Containern är Linux. Om du använder Windows-serverfiler (`ArmaReforgerServer.exe`) kan spelservern inte startas i containern – men Web-UI och resten av funktionerna kan testas.
+
 ## Snabbinstallation (Rekommenderat)
 
 ### Steg 1: Klona repositoryt

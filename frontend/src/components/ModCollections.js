@@ -9,7 +9,6 @@ function ModCollections({ userRole }) {
   const [message, setMessage] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [selectedCollection, setSelectedCollection] = useState(null);
 
   // Form data
   const [formData, setFormData] = useState({

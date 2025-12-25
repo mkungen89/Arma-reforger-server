@@ -70,13 +70,24 @@ class WorkshopAPI {
 
     // Parse API response
     parseApiResponse(data, workshopId) {
+        const fileSizeBytes = data.size || data.fileSize || 0;
+        const gameVersion =
+            data.gameVersion ||
+            data.requiredGameVersion ||
+            data.minGameVersion ||
+            data.game?.version ||
+            data.game?.gameVersion ||
+            '';
+
         const modInfo = {
             id: workshopId,
             name: data.name || data.title || 'Unknown Mod',
             author: data.author?.name || data.authorName || 'Unknown',
             description: data.description || data.summary || '',
             version: data.version || data.latestVersion || '1.0.0',
-            size: this.formatBytes(data.size || data.fileSize || 0),
+            size: this.formatBytes(fileSizeBytes),
+            fileSizeBytes,
+            gameVersion,
             updated: data.updated || data.timeUpdated || new Date().toISOString(),
             downloads: data.downloads || data.subscriptions || 0,
             rating: data.rating || 0,
@@ -116,6 +127,8 @@ class WorkshopAPI {
             description: '',
             version: '1.0.0',
             size: 'Unknown',
+            fileSizeBytes: 0,
+            gameVersion: '',
             updated: new Date().toISOString(),
             downloads: 0,
             rating: 0,
@@ -124,6 +137,64 @@ class WorkshopAPI {
             status: 'not_installed',
             enabled: false
         };
+
+        // Preferred: parse Next.js payload (stable and includes all metadata)
+        try {
+            const nextDataRaw = $('#__NEXT_DATA__').text();
+            if (nextDataRaw) {
+                const nextData = JSON.parse(nextDataRaw);
+                const asset = nextData?.props?.pageProps?.asset;
+                if (asset) {
+                    modInfo.name = asset.name || modInfo.name;
+                    modInfo.author = asset.author?.username || asset.author?.name || modInfo.author;
+                    modInfo.description = asset.description || asset.summary || modInfo.description;
+
+                    const versionNumber = asset.currentVersionNumber || asset.latestVersionNumber;
+                    if (versionNumber) modInfo.version = versionNumber;
+
+                    const sizeBytes = asset.currentVersionSize || asset.currentVersionSizeBytes || asset.totalFileSize || 0;
+                    if (typeof sizeBytes === 'number') {
+                        modInfo.fileSizeBytes = sizeBytes;
+                        modInfo.size = this.formatBytes(sizeBytes);
+                    }
+
+                    modInfo.rating = asset.averageRating || asset.ratings?.rating || modInfo.rating;
+                    modInfo.updated = asset.updatedAt || modInfo.updated;
+                    modInfo.downloads =
+                        nextData?.props?.pageProps?.getAssetDownloadTotal?.total ||
+                        asset.getAssetDownloadTotal?.total ||
+                        asset.downloadTotal ||
+                        modInfo.downloads;
+
+                    // Game version can be on asset, dependencyTree, or current version
+                    modInfo.gameVersion =
+                        asset.gameVersion ||
+                        asset.dependencyTree?.gameVersion ||
+                        asset.versions?.[0]?.gameVersion ||
+                        modInfo.gameVersion;
+
+                    // Thumbnail / preview
+                    const preview0 = asset.previews?.[0];
+                    const thumb =
+                        preview0?.thumbnails?.['image/jpeg']?.[0]?.url ||
+                        preview0?.url ||
+                        $('meta[property="og:image"]').attr('content') ||
+                        modInfo.thumbnailUrl;
+                    if (thumb) modInfo.thumbnailUrl = thumb;
+
+                    // Dependencies (best-effort)
+                    if (Array.isArray(asset.dependencies)) {
+                        modInfo.dependencies = asset.dependencies
+                            .map((d) => (d?.id || d?.workshopId || d)?.toString?.())
+                            .filter(Boolean);
+                    }
+
+                    return modInfo;
+                }
+            }
+        } catch (e) {
+            // Fall back to DOM scraping below
+        }
 
         // Extract mod name
         const title = $('h1.workshop-item-title, .item-title, h1').first().text().trim();
@@ -145,6 +216,15 @@ class WorkshopAPI {
         // Extract size
         const size = $('.file-size, .item-size').first().text().trim();
         if (size) modInfo.size = size;
+
+        // Extract game version (best-effort)
+        const gameVersion =
+            $('meta[name="gameVersion"]').attr('content') ||
+            $('meta[name="requiredGameVersion"]').attr('content') ||
+            $('.game-version, .required-game-version, .min-game-version').first().text().trim();
+        if (gameVersion) modInfo.gameVersion = gameVersion;
+
+        // If we got a size string (e.g. "196.94 KB"), keep fileSizeBytes as 0 (unknown)
 
         // Extract thumbnail
         const thumbnail = $('meta[property="og:image"]').attr('content') ||

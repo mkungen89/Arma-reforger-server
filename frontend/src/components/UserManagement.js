@@ -33,7 +33,7 @@ function UserManagement() {
 
     try {
       const token = localStorage.getItem('authToken');
-      const response = await axios.post('/api/users', newUser, {
+      await axios.post('/api/users', newUser, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

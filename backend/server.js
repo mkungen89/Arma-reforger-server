@@ -5,11 +5,15 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const si = require('systeminformation');
+const { resolveSteamCmdExecutable, resolveServerExecutable, isWindows, looksLikeWindowsPath } = require('./platform');
+const { createRateLimiter } = require('./rateLimit');
+const { isValidInternalRequest } = require('./internalApiKey');
+const { sendApiError } = require('./apiError');
 
 // Import routers
 const modManager = require('./modManager');
 const diagnostics = require('./diagnostics');
-const { router: authRouter, requireAuth, requireAdmin } = require('./auth');
+const { router: authRouter, requireAuth, requireAdmin, requireRole } = require('./auth');
 const battlelog = require('./battlelog');
 const playerManager = require('./playerManager');
 const scheduler = require('./scheduler');
@@ -31,6 +35,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
+// Rate-limit auth endpoints (public)
+const authLimiter = createRateLimiter({
+    windowMs: 60_000,
+    max: 30,
+    message: 'Too many auth requests, please try again shortly.'
+});
+app.use('/api/auth', authLimiter);
+
 // PUBLIC routes (no auth required) - Battlelog & Server Browser are public!
 app.use('/api', battlelog);
 app.use('/api', serverBrowserRouter);
@@ -41,8 +53,18 @@ app.use('/api', systemUpdatePublicRouter); // Public system info endpoints
 // Use routers (auth routes are public)
 app.use('/api', authRouter);
 
-// Protected routes - require authentication
-app.use('/api', requireAuth);
+// Protected routes - require authentication (or internal API key for local automation)
+app.use('/api', (req, res, next) => {
+    if (isValidInternalRequest(req)) {
+        // Internal automation (scheduler) acts as admin
+        req.user = { steamId: 'internal', displayName: 'Internal', role: 'admin' };
+        return next();
+    }
+    return requireAuth(req, res, next);
+});
+
+// Server control endpoints should be admin/gm (still accessible for internal automation)
+app.use('/api/server', requireRole(['admin', 'gm']));
 app.use('/api', modManager);
 app.use('/api', diagnostics);
 app.use('/api', playerManager);
@@ -63,10 +85,12 @@ function loadConfig() {
             config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         } else {
             // Default configuration with all Arma Reforger settings
+            const defaultServerPath = isWindows() ? 'C:\\ArmaReforgerServer' : '/opt/arma-reforger';
+            const defaultSteamCmdPath = isWindows() ? 'C:\\SteamCMD' : '/usr/games/steamcmd';
             config = {
                 // Installation paths
-                serverPath: 'C:\\ArmaReforgerServer',
-                steamCmdPath: 'C:\\SteamCMD',
+                serverPath: defaultServerPath,
+                steamCmdPath: defaultSteamCmdPath,
 
                 // Basic settings
                 serverName: 'My Arma Reforger Server',
@@ -152,6 +176,12 @@ let serverProcess = null;
 let serverStatus = 'stopped';
 let serverLogs = [];
 const MAX_LOG_LINES = 1000;
+let lastExitCode = null;
+let lastExitSignal = null;
+let lastExitAt = null;
+let lastStartAt = null;
+let lastStopRequestedAt = null;
+let lastError = null;
 
 // WebSocket for real-time updates
 const wss = new WebSocket.Server({ noServer: true });
@@ -206,28 +236,70 @@ app.get('/api/status', async (req, res) => {
             status: serverStatus,
             pid: serverProcess ? serverProcess.pid : null,
             uptime: serverProcess ? process.uptime() : 0,
+            lastExit: {
+                code: lastExitCode,
+                signal: lastExitSignal,
+                at: lastExitAt
+            },
+            lastStartAt,
+            lastStopRequestedAt,
+            lastError,
             system: systemInfo,
             config
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendApiError(res, 500, 'STATUS_FAILED', 'Failed to get status', error.message);
     }
+});
+
+// Environment info (for UI banners)
+app.get('/api/env', (req, res) => {
+    const serverPathLooksWindows = looksLikeWindowsPath(config.serverPath);
+    const steamCmdLooksWindows = looksLikeWindowsPath(config.steamCmdPath);
+
+    res.json({
+        runtime: {
+            platform: process.platform,
+            arch: process.arch,
+            node: process.version,
+            isDocker: fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv'),
+            isWindows: isWindows()
+        },
+        config: {
+            serverPath: config.serverPath,
+            steamCmdPath: config.steamCmdPath,
+            windowsPathOnLinux: !isWindows() && (serverPathLooksWindows || steamCmdLooksWindows)
+        }
+    });
 });
 
 // Start server
 app.post('/api/server/start', (req, res) => {
-    if (serverStatus === 'running') {
-        return res.status(400).json({ error: 'Server is already running' });
+    if (serverStatus === 'running' && serverProcess) {
+        return res.json({ success: true, message: 'Server is already running', pid: serverProcess.pid });
     }
 
     try {
-        const serverExe = path.join(config.serverPath, 'ArmaReforgerServer.exe');
+        if (!isWindows() && looksLikeWindowsPath(config.serverPath)) {
+            return sendApiError(
+                res,
+                400,
+                'CONFIG_PATH_MISMATCH',
+                'Server path looks like a Windows path, but this process is running on Linux.',
+                { serverPath: config.serverPath },
+                'For Docker/Linux, set serverPath to something like /opt/arma-reforger (and install the Linux server there).'
+            );
+        }
+        const { executablePath: serverExe, tried } = resolveServerExecutable(config.serverPath);
 
         if (!fs.existsSync(serverExe)) {
-            return res.status(400).json({
-                error: 'Server executable not found. Please run installation first.',
-                path: serverExe
-            });
+            return sendApiError(
+                res,
+                400,
+                'SERVER_EXE_NOT_FOUND',
+                'Server executable not found. Please run installation first.',
+                { path: serverExe, tried }
+            );
         }
 
         // Create server config file
@@ -267,6 +339,9 @@ app.post('/api/server/start', (req, res) => {
         ];
 
         addLog('Starting Arma Reforger Server...', 'info');
+        serverStatus = 'starting';
+        lastStartAt = new Date().toISOString();
+        lastError = null;
         serverProcess = spawn(serverExe, args, {
             cwd: config.serverPath,
             stdio: ['ignore', 'pipe', 'pipe']
@@ -287,6 +362,7 @@ app.post('/api/server/start', (req, res) => {
         serverProcess.on('error', (error) => {
             addLog(`Server error: ${error.message}`, 'error');
             serverStatus = 'error';
+            lastError = { message: error.message, at: new Date().toISOString() };
             broadcastToClients({ type: 'status', data: { status: 'error' } });
         });
 
@@ -294,6 +370,9 @@ app.post('/api/server/start', (req, res) => {
             addLog(`Server stopped. Exit code: ${code}, Signal: ${signal}`, 'info');
             serverStatus = 'stopped';
             serverProcess = null;
+            lastExitCode = code;
+            lastExitSignal = signal;
+            lastExitAt = new Date().toISOString();
             broadcastToClients({ type: 'status', data: { status: 'stopped' } });
         });
 
@@ -302,18 +381,20 @@ app.post('/api/server/start', (req, res) => {
 
     } catch (error) {
         addLog(`Failed to start server: ${error.message}`, 'error');
-        res.status(500).json({ error: error.message });
+        lastError = { message: error.message, at: new Date().toISOString() };
+        return sendApiError(res, 500, 'SERVER_START_FAILED', 'Failed to start server', error.message);
     }
 });
 
 // Stop server
 app.post('/api/server/stop', (req, res) => {
     if (serverStatus !== 'running' || !serverProcess) {
-        return res.status(400).json({ error: 'Server is not running' });
+        return res.json({ success: true, message: 'Server is already stopped' });
     }
 
     try {
         addLog('Stopping server...', 'info');
+        lastStopRequestedAt = new Date().toISOString();
         serverProcess.kill('SIGTERM');
 
         setTimeout(() => {
@@ -325,7 +406,7 @@ app.post('/api/server/stop', (req, res) => {
         res.json({ success: true, message: 'Server stop initiated' });
     } catch (error) {
         addLog(`Failed to stop server: ${error.message}`, 'error');
-        res.status(500).json({ error: error.message });
+        return sendApiError(res, 500, 'SERVER_STOP_FAILED', 'Failed to stop server', error.message);
     }
 });
 
@@ -340,7 +421,7 @@ app.post('/api/server/restart', async (req, res) => {
         // Trigger start via internal call
         req.app.handle({ ...req, method: 'POST', url: '/api/server/start' }, res);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendApiError(res, 500, 'SERVER_RESTART_FAILED', 'Failed to restart server', error.message);
     }
 });
 
@@ -362,27 +443,37 @@ app.get('/api/config', (req, res) => {
 });
 
 // Update config
-app.put('/api/config', (req, res) => {
+app.put('/api/config', requireRole(['admin', 'gm']), (req, res) => {
     try {
         config = { ...config, ...req.body };
         saveConfig();
         res.json({ success: true, config });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendApiError(res, 500, 'CONFIG_SAVE_FAILED', 'Failed to save config', error.message);
     }
 });
 
 // Update server (via SteamCMD)
 app.post('/api/server/update', (req, res) => {
     if (serverStatus === 'running') {
-        return res.status(400).json({ error: 'Please stop the server before updating' });
+        return sendApiError(res, 400, 'SERVER_RUNNING', 'Please stop the server before updating');
     }
 
     try {
-        const steamCmd = path.join(config.steamCmdPath, 'steamcmd.exe');
+        if (!isWindows() && looksLikeWindowsPath(config.steamCmdPath)) {
+            return sendApiError(
+                res,
+                400,
+                'CONFIG_PATH_MISMATCH',
+                'SteamCMD path looks like a Windows path, but this process is running on Linux.',
+                { steamCmdPath: config.steamCmdPath },
+                'For Docker/Linux, set steamCmdPath to /usr/games/steamcmd (or a directory containing steamcmd).'
+            );
+        }
+        const steamCmd = resolveSteamCmdExecutable(config.steamCmdPath);
 
-        if (!fs.existsSync(steamCmd)) {
-            return res.status(400).json({ error: 'SteamCMD not found' });
+        if (!steamCmd || !fs.existsSync(steamCmd)) {
+            return sendApiError(res, 400, 'STEAMCMD_NOT_FOUND', 'SteamCMD not found', { path: steamCmd || null });
         }
 
         addLog('Starting server update...', 'info');
@@ -408,7 +499,7 @@ app.post('/api/server/update', (req, res) => {
 
         res.json({ success: true, message: 'Update started' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendApiError(res, 500, 'SERVER_UPDATE_FAILED', 'Failed to start update', error.message);
     }
 });
 

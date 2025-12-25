@@ -112,6 +112,29 @@ En komplett lösning för att hantera din Arma Reforger dedikerade server med mo
 - ✅ **Windows 10/11**
 - ✅ **Windows Server 2019/2022**
 
+## Köra via Docker (Docker Desktop) – för test
+
+Detta kör **Web-UI + API** i en container (prod-build). Dina data ligger kvar på din dator via volymer.
+
+### Starta
+
+```bash
+docker compose up --build
+```
+
+Öppna: **http://localhost:3001**
+
+### Persistenta mappar
+
+- **`./config`**: `server-config.json`, `users.json`, `mods.json` m.m.
+- **`./backups`**: skapade backups + `backups.json`
+- **`./mods`**: mod-relaterade filer (om du använder SteamCMD för mods)
+
+### Viktigt (Windows host)
+
+- Docker-containern är **Linux**. Om din `serverPath` pekar på **Windows `.exe`** (t.ex. `ArmaReforgerServer.exe`) så kan själva spelserver-processen inte startas i containern. Docker-läget är främst för att testa **Web-UI, Battlelog, användare, scheduler, backups, API** osv.
+- På din **Ubuntu VPS** kan du köra antingen “native” enligt guiden nedan, eller använda Docker och peka `serverPath`/`steamCmdPath` mot en Linux-installation.
+
 ## Snabbstart - Ubuntu VPS
 
 ### Installation med ett kommando

@@ -87,6 +87,22 @@ function requireAdmin(req, res, next) {
     next();
 }
 
+// Middleware factory to check allowed roles
+function requireRole(allowedRoles = []) {
+    const allowed = new Set(allowedRoles);
+    return function (req, res, next) {
+        const role = req.user?.role;
+        if (!role || !allowed.has(role)) {
+            return res.status(403).json({
+                error: 'Insufficient permissions',
+                code: 'FORBIDDEN',
+                requiredRoles: allowedRoles
+            });
+        }
+        next();
+    };
+}
+
 // Get Steam API key from config
 function getSteamApiKey() {
     try {
@@ -402,5 +418,6 @@ router.delete('/users/:steamId', requireAuth, requireAdmin, (req, res) => {
 module.exports = {
     router,
     requireAuth,
-    requireAdmin
+    requireAdmin,
+    requireRole
 };

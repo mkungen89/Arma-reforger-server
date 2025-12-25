@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './PlayerManagement.css';
 
@@ -27,13 +27,7 @@ function PlayerManagement({ userRole }) {
 
   const canModerate = userRole === 'admin' || userRole === 'gm';
 
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5000); // Update every 5 seconds
-    return () => clearInterval(interval);
-  }, [activeTab]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [playersRes, statsRes] = await Promise.all([
         axios.get('/api/players/active'),
@@ -57,7 +51,13 @@ function PlayerManagement({ userRole }) {
       setMessage({ type: 'error', text: 'Failed to load player data' });
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 5000); // Update every 5 seconds
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   const handleWarn = async (player) => {
     const reason = prompt(`Warn ${player.playerName}?\n\nEnter reason:`);

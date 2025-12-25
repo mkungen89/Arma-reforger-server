@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { useToast } from './ToastProvider';
 
 function ServerControl({ serverStatus }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const { addToast } = useToast();
 
   const handleStart = async () => {
     setLoading(true);
@@ -11,11 +13,14 @@ function ServerControl({ serverStatus }) {
     try {
       const response = await axios.post('/api/server/start');
       setMessage({ type: 'success', text: response.data.message });
+      addToast({ type: 'success', title: 'Server', message: response.data.message || 'Start OK' });
     } catch (error) {
+      const errText = error.response?.data?.error || 'Failed to start server';
       setMessage({
         type: 'error',
-        text: error.response?.data?.error || 'Failed to start server',
+        text: errText,
       });
+      addToast({ type: 'error', title: 'Server', message: errText });
     }
     setLoading(false);
   };
@@ -26,11 +31,14 @@ function ServerControl({ serverStatus }) {
     try {
       const response = await axios.post('/api/server/stop');
       setMessage({ type: 'success', text: response.data.message });
+      addToast({ type: 'success', title: 'Server', message: response.data.message || 'Stop OK' });
     } catch (error) {
+      const errText = error.response?.data?.error || 'Failed to stop server';
       setMessage({
         type: 'error',
-        text: error.response?.data?.error || 'Failed to stop server',
+        text: errText,
       });
+      addToast({ type: 'error', title: 'Server', message: errText });
     }
     setLoading(false);
   };
@@ -39,13 +47,16 @@ function ServerControl({ serverStatus }) {
     setLoading(true);
     setMessage(null);
     try {
-      const response = await axios.post('/api/server/restart');
+      await axios.post('/api/server/restart');
       setMessage({ type: 'success', text: 'Server restart initiated' });
+      addToast({ type: 'info', title: 'Server', message: 'Restart initiated' });
     } catch (error) {
+      const errText = error.response?.data?.error || 'Failed to restart server';
       setMessage({
         type: 'error',
-        text: error.response?.data?.error || 'Failed to restart server',
+        text: errText,
       });
+      addToast({ type: 'error', title: 'Server', message: errText });
     }
     setLoading(false);
   };
@@ -60,11 +71,14 @@ function ServerControl({ serverStatus }) {
     try {
       const response = await axios.post('/api/server/update');
       setMessage({ type: 'info', text: response.data.message + ' - Check logs for progress' });
+      addToast({ type: 'info', title: 'Update', message: response.data.message || 'Update started' });
     } catch (error) {
+      const errText = error.response?.data?.error || 'Failed to start update';
       setMessage({
         type: 'error',
-        text: error.response?.data?.error || 'Failed to start update',
+        text: errText,
       });
+      addToast({ type: 'error', title: 'Update', message: errText });
     }
     setLoading(false);
   };

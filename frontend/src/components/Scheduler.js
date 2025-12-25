@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './Scheduler.css';
 
@@ -28,14 +28,7 @@ function Scheduler({ userRole }) {
 
   const isAdmin = userRole === 'admin';
 
-  useEffect(() => {
-    loadData();
-    loadTaskTypes();
-    const interval = setInterval(loadData, 10000); // Refresh every 10 seconds
-    return () => clearInterval(interval);
-  }, [activeTab]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const tasksRes = await axios.get('/api/tasks');
       setTasks(tasksRes.data.tasks || []);
@@ -51,16 +44,23 @@ function Scheduler({ userRole }) {
       setMessage({ type: 'error', text: 'Failed to load tasks' });
       setLoading(false);
     }
-  };
+  }, [activeTab]);
 
-  const loadTaskTypes = async () => {
+  const loadTaskTypes = useCallback(async () => {
     try {
       const response = await axios.get('/api/tasks/types/available');
       setTaskTypes(response.data.types || []);
     } catch (error) {
       console.error('Error loading task types:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+    loadTaskTypes();
+    const interval = setInterval(loadData, 10000); // Refresh every 10 seconds
+    return () => clearInterval(interval);
+  }, [loadData, loadTaskTypes]);
 
   const handleCreateTask = async (e) => {
     e.preventDefault();

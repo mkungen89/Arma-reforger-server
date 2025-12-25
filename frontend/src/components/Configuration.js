@@ -59,7 +59,7 @@ function Configuration() {
   }
 
   return (
-    <div>
+    <div className="configuration-page">
       <div className="page-header">
         <h2>Server Configuration</h2>
         <p>Manage Arma Reforger server settings and parameters</p>
@@ -681,12 +681,12 @@ function Configuration() {
       </div>
 
       {/* Documentation Links */}
-      <div className="card" style={{ marginTop: '20px', background: '#f7fafc' }}>
+      <div className="card" style={{ marginTop: '20px' }}>
         <h4>📚 Documentation</h4>
         <p style={{ marginTop: '10px', marginBottom: '10px' }}>
           For more detailed information about Arma Reforger server configuration:
         </p>
-        <ul style={{ marginLeft: '20px', color: '#4299e1' }}>
+        <ul style={{ marginLeft: '20px' }}>
           <li>
             <a href="https://community.bistudio.com/wiki/Arma_Reforger:Server_Config" target="_blank" rel="noopener noreferrer">
               Official Server Config Documentation

@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const si = require('systeminformation');
 const { spawn } = require('child_process');
+const dgram = require('dgram');
+const { resolveSteamCmdExecutable, resolveServerExecutable } = require('./platform');
 
 // Diagnostics database
 let diagnosticHistory = [];
@@ -87,7 +89,7 @@ async function runDiagnostics(config) {
 
     try {
         // Check 1: Server files exist
-        const serverExe = path.join(config.serverPath, 'ArmaReforgerServer.exe');
+        const { executablePath: serverExe, tried } = resolveServerExecutable(config.serverPath);
         const serverFilesCheck = {
             name: 'Server Files',
             status: fs.existsSync(serverExe) ? 'pass' : 'fail',
@@ -95,6 +97,9 @@ async function runDiagnostics(config) {
                 ? `Server executable found at ${serverExe}`
                 : `Server executable not found at ${serverExe}`
         };
+        if (serverFilesCheck.status === 'fail') {
+            serverFilesCheck.tried = tried;
+        }
         results.checks.push(serverFilesCheck);
 
         if (serverFilesCheck.status === 'fail') {
@@ -107,13 +112,13 @@ async function runDiagnostics(config) {
         }
 
         // Check 2: SteamCMD exists
-        const steamCmdExe = path.join(config.steamCmdPath, 'steamcmd.exe');
+        const steamCmdExe = resolveSteamCmdExecutable(config.steamCmdPath);
         const steamCmdCheck = {
             name: 'SteamCMD',
-            status: fs.existsSync(steamCmdExe) ? 'pass' : 'fail',
-            details: fs.existsSync(steamCmdExe)
-                ? 'SteamCMD found'
-                : 'SteamCMD not found - cannot update server or download mods'
+            status: steamCmdExe && fs.existsSync(steamCmdExe) ? 'pass' : 'fail',
+            details: steamCmdExe && fs.existsSync(steamCmdExe)
+                ? `SteamCMD found at ${steamCmdExe}`
+                : `SteamCMD not found at ${steamCmdExe || '(not configured)'} - cannot update server or download mods`
         };
         results.checks.push(steamCmdCheck);
 
@@ -305,36 +310,23 @@ async function runDiagnostics(config) {
 // Check if port is available
 async function checkPortAvailability(port) {
     return new Promise((resolve) => {
-        const netstat = spawn('netstat', ['-ano']);
-        let output = '';
+        // Game server port is UDP, so check using a UDP bind attempt.
+        const socket = dgram.createSocket('udp4');
 
-        netstat.stdout.on('data', (data) => {
-            output += data.toString();
-        });
-
-        netstat.on('close', () => {
-            const lines = output.split('\n');
-            const portInUse = lines.some(line =>
-                line.includes(`:${port}`) && (line.includes('LISTENING') || line.includes('ESTABLISHED'))
-            );
-
-            if (portInUse) {
-                resolve({
-                    available: false,
-                    message: `Port ${port} is already in use`
-                });
-            } else {
-                resolve({
-                    available: true,
-                    message: `Port ${port} is available`
-                });
+        socket.once('error', (err) => {
+            socket.close();
+            if (err && err.code === 'EADDRINUSE') {
+                return resolve({ available: false, message: `UDP port ${port} is already in use` });
             }
+            return resolve({
+                available: true,
+                message: `Could not reliably check UDP port ${port} (${err?.message || 'unknown error'})`
+            });
         });
 
-        netstat.on('error', () => {
-            resolve({
-                available: true,
-                message: 'Could not check port (assuming available)'
+        socket.bind(port, '0.0.0.0', () => {
+            socket.close(() => {
+                resolve({ available: true, message: `UDP port ${port} is available` });
             });
         });
     });

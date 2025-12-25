@@ -6,6 +6,7 @@ const { promisify } = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
+const { requireAdmin } = require('./auth');
 
 const execPromise = promisify(exec);
 
@@ -18,6 +19,11 @@ async function getCurrentBranch() {
         const { stdout } = await execPromise('git rev-parse --abbrev-ref HEAD');
         return stdout.trim();
     } catch (error) {
+        // Common in Docker/zip installs where .git isn't present
+        const stderr = error?.stderr || '';
+        if (error?.code === 128 || stderr.includes('not a git repository')) {
+            return 'main';
+        }
         console.error('Error getting current branch:', error);
         return 'main'; // fallback to main
     }
@@ -41,6 +47,10 @@ async function getCurrentCommit() {
         const { stdout } = await execPromise('git rev-parse HEAD');
         return stdout.trim();
     } catch (error) {
+        const stderr = error?.stderr || '';
+        if (error?.code === 128 || stderr.includes('not a git repository')) {
+            return null;
+        }
         console.error('Error getting current commit:', error);
         return null;
     }
@@ -104,7 +114,7 @@ publicRouter.get('/system/check-update', async (req, res) => {
 });
 
 // Perform update
-router.post('/system/update', async (req, res) => {
+router.post('/system/update', requireAdmin, async (req, res) => {
     try {
         // Check if we're in a git repository
         try {
