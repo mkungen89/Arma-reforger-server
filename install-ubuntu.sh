@@ -47,6 +47,12 @@ if [ -z "$ADMIN_STEAMID" ]; then
     exit 1
 fi
 
+# SSL via certbot requires nginx
+if [ "$ENABLE_SSL" = "1" ] && [ "$ENABLE_NGINX" != "1" ]; then
+    echo "NOTE: ENABLE_SSL=1 requires ENABLE_NGINX=1. Enabling nginx automatically."
+    ENABLE_NGINX=1
+fi
+
 echo "Installation paths:"
 echo "  Server: $SERVER_PATH"
 echo "  SteamCMD: $STEAMCMD_PATH"
@@ -65,6 +71,18 @@ apt-get upgrade -y
 # Install dependencies
 echo "[2/10] Installing dependencies..."
 apt-get install -y curl wget git build-essential lib32gcc-s1 software-properties-common rsync ca-certificates gnupg
+
+# Optional: install nginx/ssl packages early (idempotent)
+if [ "$ENABLE_NGINX" = "1" ] || [ "$ENABLE_SSL" = "1" ]; then
+    echo "Installing nginx prerequisites..."
+    apt-get install -y nginx
+    if [ "$PANEL_BASIC_AUTH" = "1" ]; then
+        apt-get install -y apache2-utils
+    fi
+    if [ "$ENABLE_SSL" = "1" ]; then
+        apt-get install -y certbot python3-certbot-nginx
+    fi
+fi
 
 # Install Node.js 20.x (LTS)
 echo "[3/10] Installing Node.js 20..."
@@ -269,7 +287,7 @@ systemctl restart arma-reforger-webui.service
 # Optional: Nginx reverse proxy + HTTPS
 if [ "$ENABLE_NGINX" = "1" ]; then
     echo "Setting up Nginx reverse proxy..."
-    apt-get install -y nginx apache2-utils
+    # Packages are installed earlier when ENABLE_NGINX/ENABLE_SSL are enabled.
 
     # Rate limiting zones (http context)
     cat > /etc/nginx/conf.d/arma-reforger-limits.conf <<'EOF'
@@ -394,8 +412,6 @@ EOF
             echo "WARNING: ENABLE_SSL=1 but CERTBOT_EMAIL is empty. Skipping certbot."
         else
             echo "Requesting Let's Encrypt certificates via certbot..."
-            apt-get install -y certbot python3-certbot-nginx
-
             DOMAINS=()
             if [ -n "$BATTLELOG_DOMAIN" ]; then DOMAINS+=("-d" "$BATTLELOG_DOMAIN"); fi
             if [ -n "$PANEL_DOMAIN" ]; then DOMAINS+=("-d" "$PANEL_DOMAIN"); fi
