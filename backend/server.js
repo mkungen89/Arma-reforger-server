@@ -21,7 +21,7 @@ const socialRouter = require('./social');
 const { router: battleReportsRouter } = require('./battleReports');
 const { router: serverBrowserRouter } = require('./serverBrowser');
 const BattlelogIntegration = require('./battlelogIntegration');
-const systemUpdate = require('./systemUpdate');
+const { router: systemUpdateRouter, publicRouter: systemUpdatePublicRouter } = require('./systemUpdate');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +36,7 @@ app.use('/api', battlelog);
 app.use('/api', serverBrowserRouter);
 app.use('/api', battleReportsRouter);
 app.use('/api', achievementsRouter);
+app.use('/api', systemUpdatePublicRouter); // Public system info endpoints
 
 // Use routers (auth routes are public)
 app.use('/api', authRouter);
@@ -50,7 +51,7 @@ app.use('/api', backup);
 app.use('/api', discordRouter);
 app.use('/api', modCollections);
 app.use('/api', socialRouter);
-app.use('/api', systemUpdate);
+app.use('/api', systemUpdateRouter); // Protected system update endpoint
 
 // Load configuration
 const configPath = path.join(__dirname, '../config/server-config.json');

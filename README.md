@@ -501,6 +501,16 @@ MIT License - se LICENSE fil för detaljer
 
 ## Changelog
 
+### Version 3.2.2 (2025-12-25) 🔓
+**Bug Fix - Public System Info Endpoints**
+
+#### Fixes:
+- ✅ Made `/system/check-update` and `/system/info` publicly accessible
+- ✅ Dashboard can now check for updates without authentication
+- ✅ Fixed "Authentication required" error on system endpoints
+
+---
+
 ### Version 3.2.1 (2025-12-25) 🔧
 **Bug Fix - Auto-Update Branch Detection**
 

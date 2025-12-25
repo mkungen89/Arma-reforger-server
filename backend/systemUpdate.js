@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const publicRouter = express.Router();
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
@@ -66,8 +67,8 @@ async function getLatestCommit(branch = 'main') {
     }
 }
 
-// Check for updates
-router.get('/system/check-update', async (req, res) => {
+// Check for updates (PUBLIC - no auth required)
+publicRouter.get('/system/check-update', async (req, res) => {
     try {
         const currentBranch = await getCurrentBranch();
         const currentCommit = await getCurrentCommit();
@@ -162,8 +163,8 @@ router.post('/system/update', async (req, res) => {
     }
 });
 
-// Get system info
-router.get('/system/info', async (req, res) => {
+// Get system info (PUBLIC - no auth required)
+publicRouter.get('/system/info', async (req, res) => {
     try {
         const version = await getCurrentVersion();
         const commit = await getCurrentCommit();
@@ -195,4 +196,4 @@ router.get('/system/info', async (req, res) => {
     }
 });
 
-module.exports = router;
+module.exports = { router, publicRouter };
