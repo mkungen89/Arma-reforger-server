@@ -1,0 +1,14 @@
+{
+  "clients": [
+    {
+      "name": "Flute CMS",
+      "clientId": "flute",
+      "clientSecret": "CHANGE_ME_LONG_RANDOM_SECRET",
+      "redirectUris": [
+        "https://site.example.com/sso/callback"
+      ]
+    }
+  ]
+}
+
+

@@ -26,6 +26,7 @@ const { router: battleReportsRouter } = require('./battleReports');
 const { router: serverBrowserRouter } = require('./serverBrowser');
 const BattlelogIntegration = require('./battlelogIntegration');
 const { router: systemUpdateRouter, publicRouter: systemUpdatePublicRouter } = require('./systemUpdate');
+const ssoRouter = require('./sso');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -86,6 +87,7 @@ app.use('/api', serverBrowserRouter);
 app.use('/api', battleReportsRouter);
 app.use('/api', achievementsRouter);
 app.use('/api', systemUpdatePublicRouter); // Public system info endpoints
+app.use('/api', ssoRouter); // SSO token/userinfo endpoints are public; /sso/authorize is protected inside router
 
 // Use routers (auth routes are public)
 app.use('/api', authRouter);
