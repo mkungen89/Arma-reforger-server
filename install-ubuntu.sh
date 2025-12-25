@@ -48,6 +48,46 @@ FLUTE_DB_USER="${FLUTE_DB_USER:-flute}"
 FLUTE_DB_PASS="${FLUTE_DB_PASS:-}"
 FLUTE_ADMIN_EMAIL="${FLUTE_ADMIN_EMAIL:-}"
 
+# Logging configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_FILE="${SCRIPT_DIR}/install.log"
+ERROR_LOG="${SCRIPT_DIR}/error.log"
+
+# Initialize log files
+: > "$LOG_FILE"
+: > "$ERROR_LOG"
+
+echo "=== Installation started at $(date) ===" | tee -a "$LOG_FILE"
+echo "=== Error log started at $(date) ===" > "$ERROR_LOG"
+
+# Logging functions
+log_info() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] INFO: $*" | tee -a "$LOG_FILE"
+}
+
+log_error() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $*" | tee -a "$LOG_FILE" >> "$ERROR_LOG"
+}
+
+log_warn() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: $*" | tee -a "$LOG_FILE"
+}
+
+# Error trap - catch errors and log them
+error_exit() {
+    local line_no=$1
+    log_error "Script failed at line $line_no"
+    log_error "Installation failed. Check $ERROR_LOG for details."
+    echo ""
+    echo "❌ Installation FAILED!"
+    echo "📄 Full log: $LOG_FILE"
+    echo "🔴 Errors: $ERROR_LOG"
+    echo ""
+    exit 1
+}
+
+trap 'error_exit $LINENO' ERR
+
 is_tty() { [ -t 0 ] && [ -t 1 ]; }
 
 prompt() {
@@ -101,6 +141,7 @@ echo ""
 # Wizard: gather missing required inputs (only in interactive mode)
 if [ -z "$ADMIN_STEAMID" ]; then
   if ! is_tty; then
+    log_error "ADMIN_STEAMID is required for a secure installation."
     echo "ERROR: ADMIN_STEAMID is required for a secure installation."
     echo "Example:"
     echo "  sudo ADMIN_STEAMID=7656119XXXXXXXXXX bash install-ubuntu.sh"
@@ -239,11 +280,13 @@ echo "  User: $INSTALL_USER"
 echo ""
 
 # Update system
+log_info "[1/10] Updating system packages..."
 echo "[1/10] Updating system packages..."
 apt-get update
 apt-get upgrade -y
 
 # Install dependencies
+log_info "[2/10] Installing dependencies..."
 echo "[2/10] Installing dependencies..."
 apt-get install -y curl wget git build-essential lib32gcc-s1 software-properties-common rsync ca-certificates gnupg
 
@@ -909,3 +952,12 @@ if [ "$ENABLE_FLUTE" = "1" ]; then
     echo "     - Public Battlelog: http://${FLUTE_DOMAIN}/battlelog"
     echo "     - Admin:           http://${FLUTE_DOMAIN}/arma/login"
 fi
+
+echo ""
+log_info "Installation completed successfully!"
+echo "=== Installation completed at $(date) ===" >> "$LOG_FILE"
+echo ""
+echo "✅ Installation completed successfully!"
+echo "📄 Full log: $LOG_FILE"
+echo "🔴 Errors (if any): $ERROR_LOG"
+echo ""
