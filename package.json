@@ -1,14 +1,10 @@
 {
   "name": "arma-reforger-server-manager",
-  "version": "3.4.0",
-  "description": "Arma Reforger Server Manager with Web UI",
+  "version": "3.5.0",
+  "description": "Arma Reforger Server Manager (Node API/engine) + Flute CMS UI integration",
   "main": "backend/server.js",
   "scripts": {
-    "install-all": "npm install && cd frontend && npm install",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "nodemon backend/server.js",
-    "client": "cd frontend && npm start",
-    "build": "cd frontend && npm run build",
+    "dev": "nodemon backend/server.js",
     "start": "node backend/server.js"
   },
   "keywords": [
@@ -32,7 +28,6 @@
     "ws": "^8.14.2"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
     "nodemon": "^3.0.1"
   }
 }

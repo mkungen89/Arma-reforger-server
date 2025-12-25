@@ -58,7 +58,16 @@ app.use(cors({
 
 // Basic request hardening
 app.use(express.json({ limit: process.env.JSON_LIMIT || '1mb' }));
-app.use(express.static(path.join(__dirname, '../frontend/build')));
+// UI is now served by Flute CMS. Keep Node as API-only by default.
+// If you still want to serve a legacy React build, set SERVE_LEGACY_UI=1 and ensure frontend/build exists.
+if (process.env.SERVE_LEGACY_UI === '1') {
+    const legacyBuildPath = path.join(__dirname, '../frontend/build');
+    if (fs.existsSync(legacyBuildPath)) {
+        app.use(express.static(legacyBuildPath));
+    } else {
+        console.warn('[server] SERVE_LEGACY_UI=1 but frontend/build does not exist. Skipping static serve.');
+    }
+}
 
 // Rate-limit auth endpoints (public)
 const authLimiter = createRateLimiter({
@@ -543,9 +552,7 @@ app.post('/api/server/update', (req, res) => {
 });
 
 // Serve React app
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
-});
+// No catch-all route: Flute CMS serves the website UI. This server is API-only.
 
 // Initialize Battlelog Integration
 let battlelogIntegration = null;
@@ -561,8 +568,8 @@ try {
 const LISTEN_HOST = process.env.LISTEN_HOST || '0.0.0.0';
 const server = app.listen(PORT, LISTEN_HOST, () => {
     console.log(`Arma Reforger Server Manager running on port ${PORT}`);
-    console.log(`Web UI: http://localhost:${PORT}`);
-    console.log(`Battlelog: http://localhost:${PORT}/battlelog (PUBLIC)`);
+    console.log(`API: http://localhost:${PORT}/api`);
+    console.log(`UI is served by Flute CMS (PHP)`);
 });
 
 // Handle WebSocket upgrade

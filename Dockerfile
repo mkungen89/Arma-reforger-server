@@ -6,15 +6,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Install frontend deps
-COPY frontend/package.json frontend/package-lock.json ./frontend/
-RUN cd frontend && npm install --no-audit --no-fund
-
-# Copy source and build frontend
+# Copy backend source
 COPY backend ./backend
-COPY frontend ./frontend
-RUN cd frontend && npm run build
-
 
 FROM node:20-bookworm-slim AS runtime
 
@@ -30,7 +23,6 @@ RUN apt-get update \
 COPY --from=builder /app/package.json /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/backend ./backend
-COPY --from=builder /app/frontend/build ./frontend/build
 
 EXPOSE 3001
 

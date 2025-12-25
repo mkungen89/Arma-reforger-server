@@ -37,7 +37,7 @@ PANEL_AUTH_USER="${PANEL_AUTH_USER:-admin}"
 PANEL_AUTH_PASS="${PANEL_AUTH_PASS:-}"
 PANEL_ALLOW_IPS="${PANEL_ALLOW_IPS:-}"
 PUBLIC_API_RPM="${PUBLIC_API_RPM:-300}"
-ENABLE_FLUTE="${ENABLE_FLUTE:-0}"
+ENABLE_FLUTE="${ENABLE_FLUTE:-1}"
 FLUTE_PATH="${FLUTE_PATH:-/opt/flute}"
 FLUTE_DOMAIN="${FLUTE_DOMAIN:-}"
 FLUTE_DB_ENGINE="${FLUTE_DB_ENGINE:-mariadb}"  # mariadb|postgres
@@ -157,6 +157,12 @@ if [ "$ENABLE_SSL" = "1" ]; then
   fi
 fi
 
+# Flute requires nginx in our setup (php-fpm + nginx vhost)
+if [ "$ENABLE_FLUTE" = "1" ] && [ "$ENABLE_NGINX" != "1" ]; then
+    echo "NOTE: ENABLE_FLUTE=1 requires ENABLE_NGINX=1. Enabling nginx automatically."
+    ENABLE_NGINX=1
+fi
+
 # Hard requirement: when nginx enabled, panel domain is strongly recommended
 if [ "$ENABLE_NGINX" = "1" ] && [ -z "$PANEL_DOMAIN" ]; then
   if is_tty; then
@@ -166,14 +172,13 @@ if [ "$ENABLE_NGINX" = "1" ] && [ -z "$PANEL_DOMAIN" ]; then
   fi
 fi
 
-# Wizard: Flute install (optional)
-if is_tty && [ "$ENABLE_FLUTE" = "0" ] && [ -z "$FLUTE_DOMAIN" ]; then
-  if [ "$(prompt_yes_no 'Install Flute CMS website (recommended)?' 1)" = "1" ]; then
-    ENABLE_FLUTE=1
-    FLUTE_DOMAIN="$(prompt 'Flute site domain (e.g. site.example.com)')"
-    if [ -z "$FLUTE_ADMIN_EMAIL" ]; then
-      FLUTE_ADMIN_EMAIL="$(prompt 'Flute admin email (for future setup)' '')"
-    fi
+# Wizard: Flute is the only UI (prompt for domain if missing)
+if is_tty && [ "$ENABLE_FLUTE" = "1" ] && [ -z "$FLUTE_DOMAIN" ]; then
+  echo ""
+  echo "Flute CMS will be installed as the ONLY UI."
+  FLUTE_DOMAIN="$(prompt 'Flute site domain (e.g. site.example.com)')"
+  if [ -z "$FLUTE_ADMIN_EMAIL" ]; then
+    FLUTE_ADMIN_EMAIL="$(prompt 'Flute admin email (for future setup)' '')"
   fi
 fi
 
@@ -352,17 +357,10 @@ rsync -a --delete \
 cd "$WEB_UI_PATH"
 
 # Install NPM dependencies
-echo "[9/10] Installing Web UI dependencies..."
+echo "[9/10] Installing Node backend dependencies..."
 npm ci --omit=dev --no-audit --no-fund
 
-if [ -d "frontend" ]; then
-    cd frontend
-    npm ci --no-audit --no-fund
-    npm run build
-    # Security: remove build toolchain deps from the VPS after building
-    rm -rf node_modules
-    cd ..
-fi
+echo "Skipping React build (Flute CMS is the only UI)."
 
 # Set permissions
 chown -R "$INSTALL_USER:$INSTALL_USER" "$WEB_UI_PATH"
@@ -487,6 +485,13 @@ if [ "$ENABLE_FLUTE" = "1" ]; then
         fi
     fi
 
+    # Copy our Flute extensions/modules (kept in this repo, not in the Flute submodule)
+    if [ -d "$SCRIPT_DIR/flute-ext/app/Modules" ]; then
+        echo "Copying Arma Reforger Flute module..."
+        mkdir -p "$FLUTE_PATH/app/Modules"
+        rsync -a "$SCRIPT_DIR/flute-ext/app/Modules/" "$FLUTE_PATH/app/Modules/"
+    fi
+
     # Create DB credentials (only if missing)
     FLUTE_CREDS_FILE="$WEB_UI_PATH/config/flute-db.json"
     if [ ! -f "$FLUTE_CREDS_FILE" ]; then
@@ -556,6 +561,16 @@ server {
     root $FLUTE_PATH/public;
 
     index index.php index.html;
+
+    # Proxy Node API (same-origin for Flute UI)
+    location /api/ {
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_pass http://127.0.0.1:$WEB_UI_PORT;
+    }
 
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;

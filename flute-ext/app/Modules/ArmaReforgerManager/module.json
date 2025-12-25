@@ -1,0 +1,15 @@
+{
+  "name": "Arma Reforger Manager",
+  "description": "Admin pages for Arma Reforger Server Manager (powered by Node API).",
+  "version": "0.1.0",
+  "authors": [
+    "mkungen89"
+  ],
+  "url": "https://github.com/mkungen89/Arma-reforger-server",
+  "providers": [
+    "Flute\\\\Modules\\\\ArmaReforgerManager\\\\Providers\\\\ArmaReforgerManagerServiceProvider"
+  ],
+  "dependencies": []
+}
+
+

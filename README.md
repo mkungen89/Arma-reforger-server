@@ -1,9 +1,9 @@
 # Arma Reforger Server Manager
 
-En komplett lösning för att hantera din Arma Reforger dedikerade server med modern Web-UI, Steam authentication, och avancerade automatiseringsfunktioner.
+En komplett lösning för att hantera din Arma Reforger dedikerade server med **Flute CMS** som UI, Steam authentication (för server-control), och avancerade automatiseringsfunktioner.
 
-![Version](https://img.shields.io/badge/version-3.2.6-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Version](https://img.shields.io/badge/version-3.5.0-blue.svg)
+![License](https://img.shields.io/badge/license-GPL--3.0--or--later-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
 
 ## ⭐ NYTT I VERSION 3.0
@@ -114,7 +114,7 @@ En komplett lösning för att hantera din Arma Reforger dedikerade server med mo
 
 ## Köra via Docker (Docker Desktop) – för test
 
-Detta kör **Web-UI + API** i en container (prod-build). Dina data ligger kvar på din dator via volymer.
+Detta kör **Node backend (API + server control)** i en container. **UI körs via Flute CMS** och ingår inte i Docker-läget.
 
 ### Starta
 
@@ -122,7 +122,7 @@ Detta kör **Web-UI + API** i en container (prod-build). Dina data ligger kvar p
 docker compose up --build
 ```
 
-Öppna: **http://localhost:3001**
+Öppna API: **http://localhost:3001/api**
 
 ### Persistenta mappar
 
@@ -132,7 +132,7 @@ docker compose up --build
 
 ### Viktigt (Windows host)
 
-- Docker-containern är **Linux**. Om din `serverPath` pekar på **Windows `.exe`** (t.ex. `ArmaReforgerServer.exe`) så kan själva spelserver-processen inte startas i containern. Docker-läget är främst för att testa **Web-UI, Battlelog, användare, scheduler, backups, API** osv.
+- Docker-containern är **Linux**. Om din `serverPath` pekar på **Windows `.exe`** (t.ex. `ArmaReforgerServer.exe`) så kan själva spelserver-processen inte startas i containern. Docker-läget är främst för att testa **API/Battlelog/Users/Scheduler/Backups** osv.
 - På din **Ubuntu VPS** kan du köra antingen “native” enligt guiden nedan, eller använda Docker och peka `serverPath`/`steamCmdPath` mot en Linux-installation.
 
 ## Snabbstart - Ubuntu VPS
@@ -145,17 +145,19 @@ git clone https://github.com/mkungen89/Arma-reforger-server.git
 cd Arma-reforger-server
 
 # Kör installation (kräver root/sudo)
-sudo ADMIN_STEAMID=7656119XXXXXXXXXX bash install-ubuntu.sh
+sudo bash install-ubuntu.sh
 ```
 
 Installationen kommer att:
-- Installera Node.js, Git och dependencies
+- Installera Node.js, Git och dependencies (Node backend = API/engine)
 - Installera SteamCMD
 - Ladda ner Arma Reforger Server (~10-30 GB)
-- Installera Web-UI
+- Installera Flute CMS (PHP) som **enda UI**
+- Installera PHP 8.2+ + Composer
+- Installera DB (MariaDB som default) och skapa DB/user/password för Flute
 - Konfigurera systemd service
 - Konfigurera firewall (UFW)
-- Skapa standardanvändare
+- Skapa admin-användare i vår backend (SteamID via wizard)
 
 ### Efter installation:
 
@@ -169,31 +171,31 @@ Installationen kommer att:
    }
    ```
 
-2. **Starta Web-UI:**
+2. **Starta Node backend (API):**
    ```bash
    sudo systemctl start arma-reforger-webui
    sudo systemctl enable arma-reforger-webui  # Auto-start vid boot
    ```
 
-3. **Öppna i webbläsare:**
-   ```
-   http://DIN_SERVER_IP:3001
-   ```
+3. **Öppna Flute-sidan i webbläsare:**
+   - `http://DIN_FLUTE_DOMÄN/` (eller `https://...` om SSL)
+   - Node API ligger bakom samma host via Nginx: `http://DIN_FLUTE_DOMÄN/api/*`
+   - Arma-sidan (Flute-modul): `http://DIN_FLUTE_DOMÄN/arma` (kräver inloggning i Flute)
 
 4. **Logga in:**
-   - Du kan bara logga in om din SteamID finns i `/opt/arma-reforger-manager/config/users.json`
-   - Under installationen skapas en admin-användare med den SteamID du angav via `ADMIN_STEAMID`
+   - Flute har sin egen installer + admin-konto (web installer) första gången.
+   - Vår backend behåller roll-listan i `/opt/arma-reforger-manager/config/users.json` för server-control.
 
 ### Systemd Kommandon
 
 ```bash
-# Starta Web-UI
+# Starta Node backend (API/engine)
 sudo systemctl start arma-reforger-webui
 
-# Stoppa Web-UI
+# Stoppa Node backend
 sudo systemctl stop arma-reforger-webui
 
-# Restart Web-UI
+# Restart Node backend
 sudo systemctl restart arma-reforger-webui
 
 # Status
@@ -205,54 +207,20 @@ sudo journalctl -u arma-reforger-webui -f
 
 ## Snabbstart - Windows
 
-### Installation med ett kommando
-
-1. Klona repository:
-```bash
-git clone https://github.com/mkungen89/Arma-reforger-server.git
-cd Arma-reforger-server
-```
-
-2. Högerklicka på `quick-install.bat` och välj **"Kör som administratör"**
-
-### Starta Web-UI (Windows)
-
-```bash
-npm start
-```
-
-Eller dubbelklicka på `start.bat`
-
-Öppna din webbläsare: **http://localhost:3001**
+Flute CMS (PHP) är primärt för Linux/VPS. Windows-installation som “allt-i-ett UI” stöds inte i samma form.
 
 ## Första inloggningen
 
-När du öppnar Web-UI första gången:
+1. **Flute (UI):**
+   - Öppna din Flute-domän första gången och kör Flute web-installer.
+   - Skapa Flute admin-konto där.
 
-1. **Hitta ditt Steam ID:**
-   - Gå till https://steamid.io/
-   - Logga in med Steam
-   - Kopiera din **steamID64** (format: 76561199XXXXXXXXX)
+2. **Node backend (server-control):**
+   - Din admin SteamID64 sätts i installern och sparas i `/opt/arma-reforger-manager/config/users.json`.
+   - Lägg in Steam Web API Key i `/opt/arma-reforger-manager/config/server-config.json` (`steamApiKey`).
 
-2. **Logga in:**
-   - Ange ditt Steam ID i login-formuläret
-   - Om ditt ID inte är auktoriserat, be en admin att lägga till dig
-
-3. **För första användaren:**
-   - Editera `config/users.json` manuellt
-   - Byt standardanvändarens SteamID till ditt eget:
-   ```json
-   {
-     "users": [
-       {
-         "steamId": "DITT_STEAM_ID_HÄR",
-         "displayName": "Admin",
-         "role": "admin",
-         "addedAt": "2024-01-01T00:00:00Z"
-       }
-     ]
-   }
-   ```
+3. **Arma-sidan i Flute:**
+   - Öppna `http(s)://DIN_FLUTE_DOMÄN/arma` (visar status + battlelog via `/api/*`).
 
 ## Användarroller
 
@@ -278,15 +246,6 @@ När du öppnar Web-UI första gången:
 
 ## Användarhantering
 
-### Lägga till användare (via Web-UI)
-
-1. Logga in som **Admin**
-2. Gå till **Users** i menyn
-3. Klicka **Add User**
-4. Ange användarens Steam ID
-5. Välj roll (Admin/GM/User)
-6. Klicka **Add User**
-
 ### Lägga till användare (manuellt)
 
 Editera `config/users.json`:
@@ -310,7 +269,7 @@ Editera `config/users.json`:
 }
 ```
 
-Starta om Web-UI efter ändring.
+Starta om Node backend efter ändring.
 
 ## Konfiguration
 
@@ -318,12 +277,12 @@ Starta om Web-UI efter ändring.
 
 Standard portar:
 - **Game Server:** UDP 2001
-- **Web UI:** TCP 3001
+- **Node API (engine):** TCP 3001 (rekommenderas bakom Nginx)
 
 ### Firewall (Ubuntu)
 
 ```bash
-# Tillåt Web UI
+# Tillåt Node API (om du inte kör Nginx framför)
 sudo ufw allow 3001/tcp
 
 # Tillåt Game Server
@@ -339,7 +298,7 @@ Installationsskriptet lägger automatiskt till regler. Manuellt:
 
 ```powershell
 New-NetFirewallRule -DisplayName "Arma Reforger Server" -Direction Inbound -Protocol UDP -LocalPort 2001 -Action Allow
-New-NetFirewallRule -DisplayName "Arma Reforger Web UI" -Direction Inbound -Protocol TCP -LocalPort 3001 -Action Allow
+New-NetFirewallRule -DisplayName "Arma Reforger API (Node)" -Direction Inbound -Protocol TCP -LocalPort 3001 -Action Allow
 ```
 
 ### Reverse Proxy (Nginx) - Rekommenderat för produktion
@@ -349,7 +308,8 @@ server {
     listen 80;
     server_name your-domain.com;
 
-    location / {
+    # Flute (PHP) kör /, och proxar Node API under /api/
+    location /api/ {
         proxy_pass http://localhost:3001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -414,14 +374,7 @@ sudo certbot --nginx -d your-domain.com
 ### Köra i utvecklingsläge
 
 ```bash
-# Backend
-npm run server
-
-# Frontend (ny terminal)
-cd frontend
-npm start
-
-# Eller båda samtidigt
+# Backend (API/engine)
 npm run dev
 ```
 
@@ -434,16 +387,8 @@ Arma-Reforger-Server/
 │   ├── auth.js            # Authentication
 │   ├── modManager.js      # Mod management
 │   └── diagnostics.js     # Diagnostics
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Login.js
-│   │   │   ├── UserManagement.js
-│   │   │   ├── Dashboard.js
-│   │   │   └── ...
-│   │   ├── App.js
-│   │   └── index.js
-│   └── package.json
+├── flute/                 # Flute CMS (git submodule)
+├── flute-ext/             # Repo-owned Flute modules (copyas in install)
 ├── config/
 │   ├── server-config.json # Server config
 │   └── users.json         # Users database
@@ -460,12 +405,17 @@ Arma-Reforger-Server/
 2. Verifiera att backend är igång
 3. Kontrollera browser console för fel
 
-### Web-UI laddas inte
+### Flute/Arma-sidan laddas inte
 
 **Ubuntu:**
 ```bash
+# Node backend (API/engine)
 sudo systemctl status arma-reforger-webui
 sudo journalctl -u arma-reforger-webui -n 50
+
+# Nginx/PHP (Flute)
+sudo systemctl status nginx
+sudo systemctl status php8.2-fpm || true
 ```
 
 **Windows:**
@@ -476,10 +426,10 @@ netstat -ano | findstr :3001
 
 ### Servern startar inte
 
-1. Kör **Diagnostics** i Web-UI
+1. Kör diagnostics via API: `GET /api/diagnostics/run` (kräver admin)
 2. Kontrollera serverfiler finns
 3. Verifiera att port 2001 är ledig
-4. Se loggar i Web-UI
+4. Se loggar via `journalctl -u arma-reforger-webui -f`
 
 ## Säkerhet
 
@@ -489,15 +439,14 @@ netstat -ano | findstr :3001
 2. **Använd HTTPS** i produktion (Nginx + Let's Encrypt)
 3. **Håll Steam API key hemlig** - lägg aldrig i Git
 4. **Begränsa admin-åtkomst** - ge endast GM-roll när möjligt
-5. **Regelbundna uppdateringar** av både server och Web-UI
+5. **Regelbundna uppdateringar** av både server och backend
 6. **Firewall** - öppna endast nödvändiga portar
 
-### Public Battlelog + Private Panel (rekommenderat)
+### Rekommenderad production setup
 
-Du vill att **Battlelog ska vara publik**, men **panelen/Web-UI ska inte exponeras**. Den säkraste och enklaste lösningen är att lägga en reverse proxy framför:
-
-- **`battlelog.din-domän.se`** → tillåter endast Battlelog (publika endpoints)
-- **`panel.din-domän.se`** → skyddas med IP-allowlist och/eller HTTP Basic Auth (och gärna bakom VPN)
+- Kör **Flute** på din domän (publik site).
+- Kör **Node backend** på `127.0.0.1:3001` och proxya endast `/api/*` via Nginx.
+- Låt admin-funktioner skyddas av backend-roller (Admin/GM) och håll `config/users.json` privat.
 
 **Viktig notis om DDoS:**
 - App-level rate limiting hjälper mot “små” attacker, men **riktig DDoS mitigation** måste göras hos leverantör/edge (t.ex. Cloudflare för HTTP, OVH/Game-DDoS för UDP).
@@ -516,7 +465,7 @@ cd Arma-reforger-server
 sudo bash install-ubuntu.sh
 ```
 
-Skriptet ställer då **enkla frågor** (ADMIN SteamID64, vill du ha Nginx/SSL, domäner, Basic Auth osv) och installerar allt.
+Skriptet ställer då **enkla frågor** (ADMIN SteamID64 för backend, Flute-domän, DB-val, Nginx/SSL) och installerar allt.
 
 ### Avancerat: kör helt utan frågor (env vars)
 
@@ -525,12 +474,10 @@ Om du vill köra helt non-interactive (bra för automation), sätt env vars:
 ```bash
 sudo \
   ADMIN_STEAMID=7656119XXXXXXXXXX \
+  FLUTE_DOMAIN=site.example.com \
   ENABLE_NGINX=1 \
   ENABLE_SSL=1 \
   CERTBOT_EMAIL=you@example.com \
-  BATTLELOG_DOMAIN=battlelog.example.com \
-  PANEL_DOMAIN=panel.example.com \
-  PANEL_BASIC_AUTH=1 \
   bash install-ubuntu.sh
 ```
 
@@ -624,7 +571,7 @@ MIT License - se LICENSE fil för detaljer
 - ✅ Runtime-config och persondata flyttade till `config.example/` + ignoreras i Git (GDPR-säkrare)
 - ✅ Lockfiles spåras igen → VPS-install använder `npm ci` (reproducerbart)
 - ✅ Tog bort oanvänd sårbar dependency (`multer`)
-- ✅ Auto-update använder nu `npm ci` och rensar `frontend/node_modules` efter build
+- ✅ Flute är enda UI (React frontend borttagen)
 
 ---
 
@@ -777,7 +724,6 @@ See [UPDATE.md](UPDATE.md) for detailed update instructions.
 - Admin-only access to advanced features
 - Improved real-time updates (WebSocket)
 - Better error handling and notifications
-- Optimized frontend build (83KB gzipped)
 
 ### Version 2.0.0
 - ✅ Steam authentication
@@ -791,7 +737,7 @@ See [UPDATE.md](UPDATE.md) for detailed update instructions.
 - ✅ Grundläggande serverhantering
 - ✅ Mod manager med dependency-kontroll
 - ✅ Diagnostik och monitoring
-- ✅ Web-UI
+- ✅ Flute CMS som UI
 - ✅ Windows support
 
 ---
