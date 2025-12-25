@@ -16,6 +16,7 @@ import Scheduler from './components/Scheduler';
 import BackupManager from './components/BackupManager';
 import DiscordSettings from './components/DiscordSettings';
 import ModCollections from './components/ModCollections';
+import ServerBrowser from './components/ServerBrowser';
 
 // Configure axios defaults
 axios.interceptors.request.use((config) => {
@@ -183,6 +184,11 @@ function App() {
               </Link>
             </li>
             <li>
+              <Link to="/server-browser">
+                <i className="icon">🌐</i> Server Browser
+              </Link>
+            </li>
+            <li>
               <Link to="/server">
                 <i className="icon">🎮</i> Server Control
               </Link>
@@ -266,6 +272,7 @@ function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard serverStatus={serverStatus} />} />
+            <Route path="/server-browser" element={<ServerBrowser />} />
             <Route path="/server" element={<ServerControl serverStatus={serverStatus} userRole={user?.role} />} />
             <Route path="/mods" element={<ModManager userRole={user?.role} />} />
             <Route path="/collections" element={<ModCollections userRole={user?.role} />} />

@@ -16,6 +16,11 @@ const scheduler = require('./scheduler');
 const backup = require('./backup');
 const { router: discordRouter } = require('./discord');
 const modCollections = require('./modCollections');
+const { router: achievementsRouter } = require('./achievements');
+const socialRouter = require('./social');
+const { router: battleReportsRouter } = require('./battleReports');
+const { router: serverBrowserRouter } = require('./serverBrowser');
+const BattlelogIntegration = require('./battlelogIntegration');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,8 +30,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// PUBLIC routes (no auth required) - Battlelog is public!
+// PUBLIC routes (no auth required) - Battlelog & Server Browser are public!
 app.use('/api', battlelog);
+app.use('/api', serverBrowserRouter);
+app.use('/api', battleReportsRouter);
+app.use('/api', achievementsRouter);
 
 // Use routers (auth routes are public)
 app.use('/api', authRouter);
@@ -40,6 +48,7 @@ app.use('/api', scheduler);
 app.use('/api', backup);
 app.use('/api', discordRouter);
 app.use('/api', modCollections);
+app.use('/api', socialRouter);
 
 // Load configuration
 const configPath = path.join(__dirname, '../config/server-config.json');
@@ -351,10 +360,21 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
+// Initialize Battlelog Integration
+let battlelogIntegration = null;
+try {
+    battlelogIntegration = new BattlelogIntegration(null, battlelog);
+    battlelogIntegration.startLogMonitoring();
+    console.log('Battlelog Integration: Initialized');
+} catch (error) {
+    console.error('Failed to initialize Battlelog Integration:', error);
+}
+
 // Start HTTP server
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Arma Reforger Server Manager running on port ${PORT}`);
     console.log(`Web UI: http://localhost:${PORT}`);
+    console.log(`Battlelog: http://localhost:${PORT}/battlelog (PUBLIC)`);
 });
 
 // Handle WebSocket upgrade
