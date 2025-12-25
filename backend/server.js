@@ -31,8 +31,32 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+
+// If running behind a reverse proxy (nginx / cloudflare / traefik), enable correct client IP handling.
+// IMPORTANT: only set this when you actually have a trusted proxy in front of the app.
+if (process.env.TRUST_PROXY === '1') {
+    app.set('trust proxy', 1);
+}
+
+// CORS: default to SAME-ORIGIN only. If you need cross-origin (e.g. separate battlelog domain),
+// set CORS_ORIGIN="https://battlelog.example.com,https://panel.example.com"
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+app.use(cors({
+    origin: (origin, cb) => {
+        // non-browser clients (curl, server-to-server) often have no Origin header
+        if (!origin) return cb(null, true);
+        if (allowedOrigins.length === 0) return cb(null, false);
+        return cb(null, allowedOrigins.includes(origin));
+    },
+    credentials: true,
+}));
+
+// Basic request hardening
+app.use(express.json({ limit: process.env.JSON_LIMIT || '1mb' }));
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
 // Rate-limit auth endpoints (public)
@@ -42,6 +66,19 @@ const authLimiter = createRateLimiter({
     message: 'Too many auth requests, please try again shortly.'
 });
 app.use('/api/auth', authLimiter);
+
+// Rate-limit public read endpoints (battlelog/server browser/etc).
+// This helps for small/medium abuse; real DDoS protection should be done at the edge (Cloudflare/OVH/etc).
+const publicLimiter = createRateLimiter({
+    windowMs: 60_000,
+    max: parseInt(process.env.PUBLIC_API_RPM || '300', 10) || 300,
+    message: 'Too many requests to public API, please try again shortly.'
+});
+app.use('/api/battlelog', publicLimiter);
+app.use('/api/server-browser', publicLimiter);
+app.use('/api/battle-reports', publicLimiter);
+app.use('/api/achievements', publicLimiter);
+app.use('/api/system', publicLimiter);
 
 // PUBLIC routes (no auth required) - Battlelog & Server Browser are public!
 app.use('/api', battlelog);

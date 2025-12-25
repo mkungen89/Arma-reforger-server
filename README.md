@@ -2,7 +2,7 @@
 
 En komplett lösning för att hantera din Arma Reforger dedikerade server med modern Web-UI, Steam authentication, och avancerade automatiseringsfunktioner.
 
-![Version](https://img.shields.io/badge/version-3.2.5-blue.svg)
+![Version](https://img.shields.io/badge/version-3.2.6-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
 
@@ -492,6 +492,21 @@ netstat -ano | findstr :3001
 5. **Regelbundna uppdateringar** av både server och Web-UI
 6. **Firewall** - öppna endast nödvändiga portar
 
+### Public Battlelog + Private Panel (rekommenderat)
+
+Du vill att **Battlelog ska vara publik**, men **panelen/Web-UI ska inte exponeras**. Den säkraste och enklaste lösningen är att lägga en reverse proxy framför:
+
+- **`battlelog.din-domän.se`** → tillåter endast Battlelog (publika endpoints)
+- **`panel.din-domän.se`** → skyddas med IP-allowlist och/eller HTTP Basic Auth (och gärna bakom VPN)
+
+**Viktig notis om DDoS:**
+- App-level rate limiting hjälper mot “små” attacker, men **riktig DDoS mitigation** måste göras hos leverantör/edge (t.ex. Cloudflare för HTTP, OVH/Game-DDoS för UDP).
+
+#### Minimal Nginx-setup (princip)
+
+- **Battlelog (public):** proxy_pass till appen men begränsa requests/connections.
+- **Panel (private):** kräver auth/IP allow, och kan även bindas till localhost och nås via SSH tunnel.
+
 ### Steam API Key
 
 För att få användarnamn och avatarer från Steam:
@@ -522,6 +537,17 @@ Bidrag är välkomna! Skapa en pull request eller öppna ett issue.
 MIT License - se LICENSE fil för detaljer
 
 ## Changelog
+
+### Version 3.2.6 (2025-12-25) 🛡️
+**Hardening (CORS + rate limits + request limits)**
+
+#### Security:
+- ✅ Default CORS är nu “same-origin” (kan styras via `CORS_ORIGIN`)
+- ✅ Request body size limit (default `1mb`, kan styras via `JSON_LIMIT`)
+- ✅ Rate limiting på publika endpoints (`/api/battlelog`, `/api/server-browser`, `/api/system`, etc) via `PUBLIC_API_RPM`
+- ✅ `x-powered-by` är avstängt och proxy-IP kan aktiveras via `TRUST_PROXY=1`
+
+---
 
 ### Version 3.2.5 (2025-12-25) ✅
 **Battlelog/Players/Scheduler/Backup hardening + reliability**
