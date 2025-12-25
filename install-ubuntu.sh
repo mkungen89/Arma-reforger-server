@@ -267,7 +267,7 @@ if [ "$ENABLE_FLUTE" = "1" ]; then
 
     # PHP 8.2+
     if command -v php >/dev/null 2>&1; then
-        PHP_VER="$(php -r 'echo PHP_MAJOR_VERSION.\".\".PHP_MINOR_VERSION;')"
+        PHP_VER="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
     else
         PHP_VER="0.0"
     fi
