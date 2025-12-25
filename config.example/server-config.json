@@ -1,0 +1,13 @@
+{
+  "serverPath": "/opt/arma-reforger",
+  "steamCmdPath": "/usr/games/steamcmd",
+  "webUIPort": 3001,
+  "serverPort": 2001,
+  "serverName": "My Arma Reforger Server",
+  "maxPlayers": 32,
+  "password": "",
+  "adminPassword": "CHANGE_ME",
+  "steamApiKey": ""
+}
+
+

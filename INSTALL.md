@@ -27,7 +27,23 @@ git clone https://github.com/mkungen89/Arma-reforger-server.git
 cd Arma-reforger-server
 ```
 
-### Steg 2: Kör installationsskriptet
+### Steg 2: Ubuntu VPS (Linux) – installation med ett kommando
+
+På Ubuntu VPS (rekommenderat) kör du:
+
+```bash
+sudo ADMIN_STEAMID=7656119XXXXXXXXXX bash install-ubuntu.sh
+```
+
+Skriptet installerar:
+- Node.js (v20 LTS)
+- SteamCMD
+- Arma Reforger Dedicated Server-filer (via SteamCMD)
+- Web-UI (bygger frontend och startar som systemd-service)
+
+Efteråt öppnar du: **http://DIN_SERVER_IP:3001**
+
+### Steg 3: Windows – kör installationsskriptet
 
 1. Högerklicka på `quick-install.bat`
 2. Välj **"Kör som administratör"**

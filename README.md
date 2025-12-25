@@ -2,7 +2,7 @@
 
 En komplett lösning för att hantera din Arma Reforger dedikerade server med modern Web-UI, Steam authentication, och avancerade automatiseringsfunktioner.
 
-![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.2.4-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
 
@@ -145,7 +145,7 @@ git clone https://github.com/mkungen89/Arma-reforger-server.git
 cd Arma-reforger-server
 
 # Kör installation (kräver root/sudo)
-sudo bash install-ubuntu.sh
+sudo ADMIN_STEAMID=7656119XXXXXXXXXX bash install-ubuntu.sh
 ```
 
 Installationen kommer att:
@@ -181,9 +181,8 @@ Installationen kommer att:
    ```
 
 4. **Logga in:**
-   - Standard admin SteamID: `76561199176944069`
-   - Byt till ditt eget SteamID i `/opt/arma-reforger-manager/config/users.json`
-   - Eller lägg till dig själv via User Management när du loggat in
+   - Du kan bara logga in om din SteamID finns i `/opt/arma-reforger-manager/config/users.json`
+   - Under installationen skapas en admin-användare med den SteamID du angav via `ADMIN_STEAMID`
 
 ### Systemd Kommandon
 
@@ -486,7 +485,7 @@ netstat -ano | findstr :3001
 
 ### Best Practices
 
-1. **Ändra default admin SteamID** direkt efter installation
+1. **Säkerställ att endast dina SteamID(s) finns i** `config/users.json`
 2. **Använd HTTPS** i produktion (Nginx + Let's Encrypt)
 3. **Håll Steam API key hemlig** - lägg aldrig i Git
 4. **Begränsa admin-åtkomst** - ge endast GM-roll när möjligt
@@ -523,6 +522,19 @@ Bidrag är välkomna! Skapa en pull request eller öppna ett issue.
 MIT License - se LICENSE fil för detaljer
 
 ## Changelog
+
+### Version 3.2.4 (2025-12-25) 🛡️
+**Secure VPS install + reproducible deps**
+
+#### Improvements / Security:
+- ✅ Ubuntu install kräver `ADMIN_STEAMID` (ingen hårdkodad default-admin längre)
+- ✅ Installer är idempotent och bevarar `config/`, `backups/`, `mods/` vid ominstall/update
+- ✅ Runtime-config och persondata flyttade till `config.example/` + ignoreras i Git (GDPR-säkrare)
+- ✅ Lockfiles spåras igen → VPS-install använder `npm ci` (reproducerbart)
+- ✅ Tog bort oanvänd sårbar dependency (`multer`)
+- ✅ Auto-update använder nu `npm ci` och rensar `frontend/node_modules` efter build
+
+---
 
 ### Version 3.2.3 (2025-12-25) 🚀
 **Docker + Mod Metadata + Security/UX Improvements**

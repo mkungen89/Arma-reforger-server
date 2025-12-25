@@ -1,0 +1,11 @@
+{
+  "enabled": false,
+  "webhookUrl": "",
+  "channelName": "",
+  "notifyOnStart": true,
+  "notifyOnStop": true,
+  "notifyOnCrash": true,
+  "notifyOnUpdate": true
+}
+
+

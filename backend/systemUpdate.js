@@ -137,13 +137,13 @@ router.post('/system/update', requireAdmin, async (req, res) => {
         console.log(`Pulling latest changes from GitHub (branch: ${currentBranch})...`);
         const { stdout: pullOutput } = await execPromise(`git pull origin ${currentBranch}`);
 
-        // Install/update npm dependencies in root
+        // Install/update npm dependencies in root (production-only for safer runtime)
         console.log('Installing npm dependencies...');
-        await execPromise('npm install');
+        await execPromise('npm ci --omit=dev --no-audit --no-fund');
 
         // Install/update frontend dependencies and rebuild
         console.log('Building frontend...');
-        await execPromise('cd frontend && npm install && npm run build');
+        await execPromise('cd frontend && npm ci --no-audit --no-fund && npm run build && rm -rf node_modules');
 
         // Get new version
         const newVersion = await getCurrentVersion();

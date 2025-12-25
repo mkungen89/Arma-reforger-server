@@ -6,10 +6,13 @@ frontend/node_modules/
 frontend/build/
 dist/
 
-# Configuration files (may contain sensitive data)
+# Configuration files (runtime / may contain sensitive data)
 config/server-config.json
 config/mods.json
 config/internal-api-key.json
+config/users.json
+config/discord-config.json
+config/scheduled-tasks.json
 
 # Local assistant/IDE state
 .claude/settings.local.json
@@ -47,6 +50,4 @@ tmp-*.html
 # Backups (runtime artifacts)
 backups/
 
-# NPM
-package-lock.json
-frontend/package-lock.json
+# NPM (lockfiles SHOULD be committed for reproducible + safer installs)

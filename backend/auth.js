@@ -14,18 +14,14 @@ function loadUsersDb() {
         if (fs.existsSync(usersDbPath)) {
             usersDatabase = JSON.parse(fs.readFileSync(usersDbPath, 'utf8'));
         } else {
-            // Create default admin user
-            usersDatabase = {
-                users: [
-                    {
-                        steamId: '76561199176944069',
-                        displayName: 'Default Admin',
-                        role: 'admin',
-                        addedAt: new Date().toISOString()
-                    }
-                ]
-            };
+            // SECURITY: do NOT auto-create a hardcoded default admin.
+            // Install scripts should create config/users.json with your real SteamID(s).
+            usersDatabase = { users: [] };
             saveUsersDb();
+            console.warn(
+                '[auth] No users.json found. Created an empty users database. ' +
+                'Add your SteamID as admin in config/users.json to be able to log in.'
+            );
         }
     } catch (error) {
         console.error('Error loading users database:', error);

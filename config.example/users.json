@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "steamId": "7656119XXXXXXXXXX",
+      "displayName": "Initial Admin",
+      "role": "admin",
+      "addedAt": "2025-01-01T00:00:00Z"
+    }
+  ]
+}
+
+
