@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const { isValidInternalRequest } = require('./internalApiKey');
 
 // Battlelog database
 const battlelogDbPath = path.join(__dirname, '../config/battlelog.json');
@@ -43,6 +44,13 @@ function saveBattlelog() {
 }
 
 loadBattlelog();
+
+function requireInternal(req, res, next) {
+    if (!isValidInternalRequest(req)) {
+        return res.status(403).json({ error: 'Internal request required' });
+    }
+    next();
+}
 
 // Get or create player
 function getOrCreatePlayer(steamId, displayName) {
@@ -287,7 +295,7 @@ router.get('/battlelog/search', (req, res) => {
 // ADMIN ROUTES (require authentication)
 
 // Record player join
-router.post('/battlelog/player/join', (req, res) => {
+router.post('/battlelog/player/join', requireInternal, (req, res) => {
     const { steamId, displayName } = req.body;
 
     const player = getOrCreatePlayer(steamId, displayName);
@@ -322,7 +330,7 @@ router.post('/battlelog/player/join', (req, res) => {
 });
 
 // Record player leave
-router.post('/battlelog/player/leave', (req, res) => {
+router.post('/battlelog/player/leave', requireInternal, (req, res) => {
     const { steamId, displayName } = req.body;
 
     const session = battlelogData.sessions
@@ -357,7 +365,7 @@ router.post('/battlelog/player/leave', (req, res) => {
 });
 
 // Record kill
-router.post('/battlelog/event/kill', (req, res) => {
+router.post('/battlelog/event/kill', requireInternal, (req, res) => {
     const { killerSteamId, killerName, victimSteamId, victimName, weapon, headshot, distance } = req.body;
 
     const killer = getOrCreatePlayer(killerSteamId, killerName);
@@ -415,7 +423,7 @@ router.post('/battlelog/event/kill', (req, res) => {
 });
 
 // Start match
-router.post('/battlelog/match/start', (req, res) => {
+router.post('/battlelog/match/start', requireInternal, (req, res) => {
     const { scenario, map, maxPlayers } = req.body;
 
     const match = {
@@ -448,7 +456,7 @@ router.post('/battlelog/match/start', (req, res) => {
 });
 
 // End match
-router.post('/battlelog/match/end', (req, res) => {
+router.post('/battlelog/match/end', requireInternal, (req, res) => {
     const { matchId, winner, players } = req.body;
 
     const match = battlelogData.matches.find(m => m.id === matchId);

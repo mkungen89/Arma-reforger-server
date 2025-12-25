@@ -2,7 +2,7 @@
 
 En komplett lösning för att hantera din Arma Reforger dedikerade server med modern Web-UI, Steam authentication, och avancerade automatiseringsfunktioner.
 
-![Version](https://img.shields.io/badge/version-3.2.4-blue.svg)
+![Version](https://img.shields.io/badge/version-3.2.5-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
 
@@ -522,6 +522,17 @@ Bidrag är välkomna! Skapa en pull request eller öppna ett issue.
 MIT License - se LICENSE fil för detaljer
 
 ## Changelog
+
+### Version 3.2.5 (2025-12-25) ✅
+**Battlelog/Players/Scheduler/Backup hardening + reliability**
+
+#### Fixes:
+- ✅ Battlelog write-endpoints kräver internal API key (publika GET kvarstår)
+- ✅ Scheduler använder internal API key för alla interna API-calls (Run Now/Backup/Mod update osv fungerar igen)
+- ✅ Player Management enforce:ar roller (GM/Admin) och skyddar internal endpoints
+- ✅ Backup/Restore är nu Admin-only + skydd mot zip-slip vid restore
+
+---
 
 ### Version 3.2.4 (2025-12-25) 🛡️
 **Secure VPS install + reproducible deps**

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { Tail } = require('tail');
 const axios = require('axios');
+const { getInternalApiKey } = require('./internalApiKey');
 
 /**
  * Battlelog Integration Module
@@ -177,7 +178,7 @@ class BattlelogIntegration {
       await axios.post('http://localhost:3001/api/battlelog/player/join', {
         steamId: steamId || `player_${playerId}`,
         displayName
-      });
+      }, { headers: { 'x-internal-api-key': getInternalApiKey() } });
     } catch (error) {
       console.error('Error recording player join:', error.message);
     }
@@ -196,7 +197,7 @@ class BattlelogIntegration {
         await axios.post('http://localhost:3001/api/battlelog/player/leave', {
           steamId: playerData.steamId,
           displayName: playerData.displayName
-        });
+        }, { headers: { 'x-internal-api-key': getInternalApiKey() } });
       } catch (error) {
         console.error('Error recording player leave:', error.message);
       }
@@ -237,7 +238,7 @@ class BattlelogIntegration {
           weapon: weapon || 'Unknown',
           headshot: headshot || false,
           distance: distance || 0
-        });
+        }, { headers: { 'x-internal-api-key': getInternalApiKey() } });
       } catch (error) {
         console.error('Error recording kill:', error.message);
       }
@@ -255,7 +256,7 @@ class BattlelogIntegration {
         scenario: scenario || 'Unknown Scenario',
         map: map || 'Unknown Map',
         maxPlayers: 64
-      });
+      }, { headers: { 'x-internal-api-key': getInternalApiKey() } });
 
       this.currentMatch = response.data.match;
     } catch (error) {
@@ -283,7 +284,7 @@ class BattlelogIntegration {
         matchId: this.currentMatch.id,
         winner: data.winner || null,
         players
-      });
+      }, { headers: { 'x-internal-api-key': getInternalApiKey() } });
 
       // Reset player match stats
       for (const [key, player] of this.activePlayers.entries()) {

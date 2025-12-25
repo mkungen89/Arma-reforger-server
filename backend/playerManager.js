@@ -3,6 +3,15 @@ const router = express.Router();
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const { requireRole } = require('./auth');
+const { isValidInternalRequest } = require('./internalApiKey');
+
+function requireInternal(req, res, next) {
+    if (!isValidInternalRequest(req)) {
+        return res.status(403).json({ error: 'Internal request required' });
+    }
+    next();
+}
 
 // In-memory storage for active players
 const activePlayers = new Map();
@@ -69,7 +78,7 @@ const bannedPlayers = new Map();
 const adminCommands = [];
 
 // Get all active players
-router.get('/players/active', (req, res) => {
+router.get('/players/active', requireRole(['admin', 'gm']), (req, res) => {
     const players = Array.from(activePlayers.values()).map(p => p.toJSON());
     res.json({
         count: players.length,
@@ -78,7 +87,7 @@ router.get('/players/active', (req, res) => {
 });
 
 // Get player by Steam ID
-router.get('/players/:steamId', (req, res) => {
+router.get('/players/:steamId', requireRole(['admin', 'gm']), (req, res) => {
     const player = activePlayers.get(req.params.steamId);
     if (!player) {
         return res.status(404).json({ error: 'Player not found' });
@@ -87,7 +96,7 @@ router.get('/players/:steamId', (req, res) => {
 });
 
 // Get player history
-router.get('/players/history/all', (req, res) => {
+router.get('/players/history/all', requireRole(['admin', 'gm']), (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
 
@@ -100,7 +109,7 @@ router.get('/players/history/all', (req, res) => {
 });
 
 // Get banned players
-router.get('/players/banned/list', (req, res) => {
+router.get('/players/banned/list', requireRole(['admin', 'gm']), (req, res) => {
     const banned = Array.from(bannedPlayers.values());
     res.json({
         count: banned.length,
@@ -109,7 +118,7 @@ router.get('/players/banned/list', (req, res) => {
 });
 
 // Player join event (called from server)
-router.post('/players/join', (req, res) => {
+router.post('/players/join', requireInternal, (req, res) => {
     const { steamId, playerName, ip } = req.body;
 
     if (!steamId || !playerName) {
@@ -148,7 +157,7 @@ router.post('/players/join', (req, res) => {
 });
 
 // Player leave event
-router.post('/players/leave', (req, res) => {
+router.post('/players/leave', requireInternal, (req, res) => {
     const { steamId } = req.body;
 
     const player = activePlayers.get(steamId);
@@ -172,7 +181,7 @@ router.post('/players/leave', (req, res) => {
 });
 
 // Update player stats
-router.post('/players/:steamId/update', (req, res) => {
+router.post('/players/:steamId/update', requireInternal, (req, res) => {
     const player = activePlayers.get(req.params.steamId);
     if (!player) {
         return res.status(404).json({ error: 'Player not found' });
@@ -183,7 +192,7 @@ router.post('/players/:steamId/update', (req, res) => {
 });
 
 // Warn player (GM+ required)
-router.post('/players/:steamId/warn', (req, res) => {
+router.post('/players/:steamId/warn', requireRole(['admin', 'gm']), (req, res) => {
     const { reason } = req.body;
     const player = activePlayers.get(req.params.steamId);
 
@@ -216,7 +225,7 @@ router.post('/players/:steamId/warn', (req, res) => {
 });
 
 // Kick player (GM+ required)
-router.post('/players/:steamId/kick', (req, res) => {
+router.post('/players/:steamId/kick', requireRole(['admin', 'gm']), (req, res) => {
     const { reason } = req.body;
     const player = activePlayers.get(req.params.steamId);
 
@@ -254,7 +263,7 @@ router.post('/players/:steamId/kick', (req, res) => {
 });
 
 // Ban player (Admin only)
-router.post('/players/:steamId/ban', (req, res) => {
+router.post('/players/:steamId/ban', requireRole(['admin']), (req, res) => {
     const { reason, duration } = req.body; // duration in hours, 0 = permanent
     const player = activePlayers.get(req.params.steamId);
 
@@ -307,7 +316,7 @@ router.post('/players/:steamId/ban', (req, res) => {
 });
 
 // Unban player (Admin only)
-router.post('/players/:steamId/unban', (req, res) => {
+router.post('/players/:steamId/unban', requireRole(['admin']), (req, res) => {
     const ban = bannedPlayers.get(req.params.steamId);
 
     if (!ban) {
@@ -331,7 +340,7 @@ router.post('/players/:steamId/unban', (req, res) => {
 });
 
 // Send message to player (GM+ required)
-router.post('/players/:steamId/message', (req, res) => {
+router.post('/players/:steamId/message', requireRole(['admin', 'gm']), (req, res) => {
     const { message } = req.body;
     const player = activePlayers.get(req.params.steamId);
 
@@ -355,7 +364,7 @@ router.post('/players/:steamId/message', (req, res) => {
 });
 
 // Broadcast message to all players (GM+ required)
-router.post('/players/broadcast', (req, res) => {
+router.post('/players/broadcast', requireRole(['admin', 'gm']), (req, res) => {
     const { message } = req.body;
 
     if (!message) {
@@ -377,14 +386,14 @@ router.post('/players/broadcast', (req, res) => {
 });
 
 // Get pending admin commands (for server to execute)
-router.get('/players/commands/pending', (req, res) => {
+router.get('/players/commands/pending', requireInternal, (req, res) => {
     const commands = [...adminCommands];
     adminCommands.length = 0; // Clear queue
     res.json({ count: commands.length, commands });
 });
 
 // Get player statistics summary
-router.get('/players/stats/summary', (req, res) => {
+router.get('/players/stats/summary', requireRole(['admin', 'gm']), (req, res) => {
     const players = Array.from(activePlayers.values());
 
     const stats = {

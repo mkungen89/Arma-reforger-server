@@ -3,6 +3,10 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
+const { requireRole } = require('./auth');
+
+// Backups include sensitive data; restrict to admin only.
+router.use(requireRole(['admin']));
 
 const backupsDir = path.join(__dirname, '../backups');
 const configPath = path.join(__dirname, '../config');
@@ -129,22 +133,28 @@ router.post('/backup/create', async (req, res) => {
     if (includeProfiles !== false) {
       // This would include server profiles from the game server directory
       // Path might vary based on configuration
-      const serverConfig = JSON.parse(fs.readFileSync(path.join(configPath, 'server-config.json'), 'utf8'));
-      const profilesPath = path.join(serverConfig.serverPath || '', 'profile');
-
-      if (fs.existsSync(profilesPath)) {
-        zip.addLocalFolder(profilesPath, 'profiles');
+      try {
+        const serverConfig = JSON.parse(fs.readFileSync(path.join(configPath, 'server-config.json'), 'utf8'));
+        const profilesPath = path.join(serverConfig.serverPath || '', 'profile');
+        if (fs.existsSync(profilesPath)) {
+          zip.addLocalFolder(profilesPath, 'profiles');
+        }
+      } catch (_) {
+        // If server-config is missing/invalid, just skip profiles.
       }
     }
 
     // Add server files (optional, usually very large)
     if (includeServer) {
       // Not recommended for regular backups due to size
-      const serverConfig = JSON.parse(fs.readFileSync(path.join(configPath, 'server-config.json'), 'utf8'));
-      const serverPath = serverConfig.serverPath;
-
-      if (fs.existsSync(serverPath)) {
-        zip.addLocalFolder(serverPath, 'server');
+      try {
+        const serverConfig = JSON.parse(fs.readFileSync(path.join(configPath, 'server-config.json'), 'utf8'));
+        const serverPath = serverConfig.serverPath;
+        if (serverPath && fs.existsSync(serverPath)) {
+          zip.addLocalFolder(serverPath, 'server');
+        }
+      } catch (_) {
+        // Skip if missing/invalid.
       }
     }
 
@@ -219,18 +229,26 @@ router.post('/backup/restore/:id', async (req, res) => {
     const zip = new AdmZip(backupPath);
     const zipEntries = zip.getEntries();
 
+    const baseDir = path.resolve(__dirname, '..');
+    const safeWriteFile = (relativePath, data) => {
+      const targetPath = path.resolve(baseDir, relativePath);
+      if (!targetPath.startsWith(baseDir + path.sep)) {
+        throw new Error('Blocked unsafe path in backup (zip-slip)');
+      }
+      const targetDir = path.dirname(targetPath);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      fs.writeFileSync(targetPath, data);
+    };
+
     // Extract config
     if (backup.includes.config) {
       zipEntries.forEach(entry => {
         if (entry.entryName.startsWith('config/')) {
-          const targetPath = path.join(__dirname, '..', entry.entryName);
-          const targetDir = path.dirname(targetPath);
-
-          if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
+          if (!entry.isDirectory) {
+            safeWriteFile(entry.entryName, entry.getData());
           }
-
-          fs.writeFileSync(targetPath, entry.getData());
         }
       });
     }
@@ -239,15 +257,8 @@ router.post('/backup/restore/:id', async (req, res) => {
     if (backup.includes.mods) {
       zipEntries.forEach(entry => {
         if (entry.entryName.startsWith('mods/')) {
-          const targetPath = path.join(__dirname, '..', entry.entryName);
-          const targetDir = path.dirname(targetPath);
-
-          if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
-          }
-
           if (!entry.isDirectory) {
-            fs.writeFileSync(targetPath, entry.getData());
+            safeWriteFile(entry.entryName, entry.getData());
           }
         }
       });
