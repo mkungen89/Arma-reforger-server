@@ -32,7 +32,25 @@ cd Arma-reforger-server
 På Ubuntu VPS (rekommenderat) kör du:
 
 ```bash
-sudo ADMIN_STEAMID=7656119XXXXXXXXXX bash install-ubuntu.sh
+sudo bash install-ubuntu.sh
+```
+
+Skriptet ställer enkla frågor om det behövs (ADMIN SteamID64, Nginx/SSL/domäner, Basic Auth osv).
+
+#### Avancerat (non-interactive / automation)
+
+Om du vill köra helt utan frågor, sätt env vars:
+
+```bash
+sudo \
+  ADMIN_STEAMID=7656119XXXXXXXXXX \
+  ENABLE_NGINX=1 \
+  ENABLE_SSL=1 \
+  CERTBOT_EMAIL=you@example.com \
+  BATTLELOG_DOMAIN=battlelog.example.com \
+  PANEL_DOMAIN=panel.example.com \
+  PANEL_BASIC_AUTH=1 \
+  bash install-ubuntu.sh
 ```
 
 Skriptet installerar:

@@ -1,6 +1,6 @@
 {
   "name": "arma-reforger-server-manager",
-  "version": "3.2.8",
+  "version": "3.2.9",
   "description": "Arma Reforger Server Manager with Web UI",
   "main": "backend/server.js",
   "scripts": {

@@ -38,19 +38,124 @@ PANEL_AUTH_PASS="${PANEL_AUTH_PASS:-}"
 PANEL_ALLOW_IPS="${PANEL_ALLOW_IPS:-}"
 PUBLIC_API_RPM="${PUBLIC_API_RPM:-300}"
 
+is_tty() { [ -t 0 ] && [ -t 1 ]; }
+
+prompt() {
+  local label="$1"
+  local default="${2:-}"
+  local value=""
+  if [ -n "$default" ]; then
+    read -r -p "$label [$default]: " value
+    echo "${value:-$default}"
+  else
+    read -r -p "$label: " value
+    echo "$value"
+  fi
+}
+
+prompt_yes_no() {
+  local label="$1"
+  local default_yes="${2:-1}" # 1=yes, 0=no
+  local def_char="Y/n"
+  if [ "$default_yes" = "0" ]; then def_char="y/N"; fi
+  while true; do
+    local ans
+    read -r -p "$label [$def_char]: " ans
+    ans="$(echo "${ans:-}" | tr '[:upper:]' '[:lower:]')"
+    if [ -z "$ans" ]; then
+      if [ "$default_yes" = "1" ]; then echo "1"; else echo "0"; fi
+      return
+    fi
+    case "$ans" in
+      y|yes) echo "1"; return ;;
+      n|no)  echo "0"; return ;;
+    esac
+    echo "Please answer y/n."
+  done
+}
+
+is_valid_steamid64() {
+  [[ "$1" =~ ^[0-9]{17}$ ]]
+}
+
+echo ""
+echo "Quick setup:"
+if is_tty; then
+  echo "  - If you just run this script, it will ask you the required questions."
+  echo "  - Advanced: set env vars to run fully non-interactive."
+else
+  echo "  - Non-interactive mode detected (no TTY). Using env vars only."
+fi
+echo ""
+
+# Wizard: gather missing required inputs (only in interactive mode)
 if [ -z "$ADMIN_STEAMID" ]; then
+  if ! is_tty; then
     echo "ERROR: ADMIN_STEAMID is required for a secure installation."
     echo "Example:"
     echo "  sudo ADMIN_STEAMID=7656119XXXXXXXXXX bash install-ubuntu.sh"
     echo ""
     echo "Tip: find your SteamID64 here: https://steamid.io/"
     exit 1
+  fi
+  while true; do
+    ADMIN_STEAMID="$(prompt 'Enter your ADMIN SteamID64 (17 digits)')"
+    if is_valid_steamid64 "$ADMIN_STEAMID"; then break; fi
+    echo "Invalid SteamID64. It should be 17 digits."
+  done
+fi
+
+# If user didn't specify nginx/ssl choices, pick safe defaults via prompts
+if is_tty && [ "$ENABLE_NGINX" = "0" ] && [ "$ENABLE_SSL" = "0" ] && [ -z "$BATTLELOG_DOMAIN" ] && [ -z "$PANEL_DOMAIN" ]; then
+  echo ""
+  echo "Recommended setup: Public Battlelog + Private Panel (behind Nginx)"
+  if [ "$(prompt_yes_no 'Enable Nginx reverse proxy (recommended)?' 1)" = "1" ]; then
+    ENABLE_NGINX=1
+    PANEL_DOMAIN="$(prompt 'Panel domain (e.g. panel.example.com)')"
+    BATTLELOG_DOMAIN="$(prompt 'Battlelog domain (e.g. battlelog.example.com, optional)' '')"
+
+    if [ "$(prompt_yes_no 'Enable HTTPS (Let\\x27s Encrypt)?' 1)" = "1" ]; then
+      ENABLE_SSL=1
+      CERTBOT_EMAIL="$(prompt 'Email for Let\\x27s Encrypt (required for SSL)')"
+    fi
+
+    if [ "$(prompt_yes_no 'Protect panel with Basic Auth (recommended)?' 1)" = "1" ]; then
+      PANEL_BASIC_AUTH=1
+      PANEL_AUTH_USER="$(prompt 'Basic Auth username' "$PANEL_AUTH_USER")"
+      PANEL_AUTH_PASS="$(prompt 'Basic Auth password (leave blank to auto-generate)' '')"
+    fi
+
+    if [ "$(prompt_yes_no 'Restrict panel by IP allowlist (optional)?' 0)" = "1" ]; then
+      PANEL_ALLOW_IPS="$(prompt 'Allowed IPs (comma separated, e.g. 1.2.3.4,5.6.7.8)')"
+    fi
+  fi
 fi
 
 # SSL via certbot requires nginx
 if [ "$ENABLE_SSL" = "1" ] && [ "$ENABLE_NGINX" != "1" ]; then
     echo "NOTE: ENABLE_SSL=1 requires ENABLE_NGINX=1. Enabling nginx automatically."
     ENABLE_NGINX=1
+fi
+
+# Hard requirements when SSL is enabled (fail fast)
+if [ "$ENABLE_SSL" = "1" ]; then
+  if [ -z "$CERTBOT_EMAIL" ]; then
+    echo "ERROR: ENABLE_SSL=1 requires CERTBOT_EMAIL."
+    exit 1
+  fi
+  if [ -z "$BATTLELOG_DOMAIN" ] && [ -z "$PANEL_DOMAIN" ]; then
+    echo "ERROR: ENABLE_SSL=1 requires at least one domain (BATTLELOG_DOMAIN and/or PANEL_DOMAIN)."
+    exit 1
+  fi
+fi
+
+# Hard requirement: when nginx enabled, panel domain is strongly recommended
+if [ "$ENABLE_NGINX" = "1" ] && [ -z "$PANEL_DOMAIN" ]; then
+  if is_tty; then
+    echo ""
+    echo "Nginx is enabled but PANEL_DOMAIN is empty."
+    PANEL_DOMAIN="$(prompt 'Panel domain (required for private panel, e.g. panel.example.com)')"
+  fi
 fi
 
 echo "Installation paths:"
@@ -408,21 +513,13 @@ EOF
     systemctl restart nginx
 
     if [ "$ENABLE_SSL" = "1" ]; then
-        if [ -z "$CERTBOT_EMAIL" ]; then
-            echo "WARNING: ENABLE_SSL=1 but CERTBOT_EMAIL is empty. Skipping certbot."
-        else
-            echo "Requesting Let's Encrypt certificates via certbot..."
-            DOMAINS=()
-            if [ -n "$BATTLELOG_DOMAIN" ]; then DOMAINS+=("-d" "$BATTLELOG_DOMAIN"); fi
-            if [ -n "$PANEL_DOMAIN" ]; then DOMAINS+=("-d" "$PANEL_DOMAIN"); fi
+        echo "Requesting Let's Encrypt certificates via certbot..."
+        DOMAINS=()
+        if [ -n "$BATTLELOG_DOMAIN" ]; then DOMAINS+=("-d" "$BATTLELOG_DOMAIN"); fi
+        if [ -n "$PANEL_DOMAIN" ]; then DOMAINS+=("-d" "$PANEL_DOMAIN"); fi
 
-            if [ ${#DOMAINS[@]} -gt 0 ]; then
-                certbot --nginx --non-interactive --agree-tos -m "$CERTBOT_EMAIL" "${DOMAINS[@]}" --redirect || \
-                    echo "WARNING: certbot failed (check DNS points to this server and ports 80/443 are open)."
-            else
-                echo "WARNING: No domains provided for SSL. Set BATTLELOG_DOMAIN and/or PANEL_DOMAIN."
-            fi
-        fi
+        certbot --nginx --non-interactive --agree-tos -m "$CERTBOT_EMAIL" "${DOMAINS[@]}" --redirect || \
+            echo "WARNING: certbot failed (check DNS points to this server and ports 80/443 are open)."
     fi
 fi
 

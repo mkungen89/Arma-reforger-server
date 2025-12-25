@@ -507,6 +507,33 @@ Du vill att **Battlelog ska vara publik**, men **panelen/Web-UI ska inte exponer
 - **Battlelog (public):** proxy_pass till appen men begränsa requests/connections.
 - **Panel (private):** kräver auth/IP allow, och kan även bindas till localhost och nås via SSH tunnel.
 
+### Installera på Ubuntu VPS (superenkelt)
+
+Efter `git clone` kan du bara köra:
+
+```bash
+cd Arma-reforger-server
+sudo bash install-ubuntu.sh
+```
+
+Skriptet ställer då **enkla frågor** (ADMIN SteamID64, vill du ha Nginx/SSL, domäner, Basic Auth osv) och installerar allt.
+
+### Avancerat: kör helt utan frågor (env vars)
+
+Om du vill köra helt non-interactive (bra för automation), sätt env vars:
+
+```bash
+sudo \
+  ADMIN_STEAMID=7656119XXXXXXXXXX \
+  ENABLE_NGINX=1 \
+  ENABLE_SSL=1 \
+  CERTBOT_EMAIL=you@example.com \
+  BATTLELOG_DOMAIN=battlelog.example.com \
+  PANEL_DOMAIN=panel.example.com \
+  PANEL_BASIC_AUTH=1 \
+  bash install-ubuntu.sh
+```
+
 ### Installer: Nginx + SSL (valfritt)
 
 Du kan låta `install-ubuntu.sh` sätta upp **Nginx reverse proxy** så att:
