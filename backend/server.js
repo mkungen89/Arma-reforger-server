@@ -21,6 +21,7 @@ const socialRouter = require('./social');
 const { router: battleReportsRouter } = require('./battleReports');
 const { router: serverBrowserRouter } = require('./serverBrowser');
 const BattlelogIntegration = require('./battlelogIntegration');
+const systemUpdate = require('./systemUpdate');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -49,6 +50,7 @@ app.use('/api', backup);
 app.use('/api', discordRouter);
 app.use('/api', modCollections);
 app.use('/api', socialRouter);
+app.use('/api', systemUpdate);
 
 // Load configuration
 const configPath = path.join(__dirname, '../config/server-config.json');

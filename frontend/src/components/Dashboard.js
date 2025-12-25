@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import SystemUpdate from './SystemUpdate';
 
 function Dashboard({ serverStatus }) {
   const [stats, setStats] = useState(null);
@@ -54,6 +55,9 @@ function Dashboard({ serverStatus }) {
         <h2>Dashboard</h2>
         <p>Server overview and system monitoring</p>
       </div>
+
+      {/* System Update Card */}
+      <SystemUpdate />
 
       <div className="stats-grid">
         <div className="stat-card">

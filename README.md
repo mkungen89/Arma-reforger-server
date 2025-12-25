@@ -501,6 +501,37 @@ MIT License - se LICENSE fil för detaljer
 
 ## Changelog
 
+### Version 3.1.0 (2025-12-25) 🔄
+**Auto-Update System & Node.js v20 Support**
+
+#### New Features:
+- ✅ **Auto-Update System**
+  - Check for updates directly in Dashboard
+  - One-click update from GitHub
+  - Automatic service restart after update
+  - Version and commit tracking
+  - Update notifications in real-time
+
+- ✅ **Node.js v20 Support**
+  - Fixed compatibility issues with Node.js v18
+  - Auto-upgrade to Node.js v20 in install script
+  - Better performance and stability
+
+#### Improvements:
+- Enhanced installation script with Node.js version detection
+- Automatic dependency updates
+- Improved error handling in backend
+- Better systemd service management
+
+#### Documentation:
+- New UPDATE.md with comprehensive update guide
+- Troubleshooting section for common update issues
+- Rollback instructions
+
+See [UPDATE.md](UPDATE.md) for detailed update instructions.
+
+---
+
 ### Version 3.0.0 (2025-12-25) 🎄
 **Major Update - Advanced Automation & Player Management**
 

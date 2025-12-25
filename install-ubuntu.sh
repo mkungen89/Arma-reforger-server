@@ -39,11 +39,19 @@ apt-get upgrade -y
 echo "[2/10] Installing dependencies..."
 apt-get install -y curl wget git build-essential lib32gcc-s1 software-properties-common
 
-# Install Node.js 18.x
-echo "[3/10] Installing Node.js..."
+# Install Node.js 20.x (LTS)
+echo "[3/10] Installing Node.js 20..."
 if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y nodejs
+else
+    # Check if Node.js version is less than 20
+    NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
+    if [ "$NODE_VERSION" -lt 20 ]; then
+        echo "Upgrading Node.js from v$NODE_VERSION to v20..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        apt-get install -y nodejs
+    fi
 fi
 
 echo "Node.js version: $(node --version)"
