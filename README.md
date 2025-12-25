@@ -524,6 +524,21 @@ MIT License - se LICENSE fil för detaljer
 
 ## Changelog
 
+### Version 3.2.3 (2025-12-25) 🚀
+**Docker + Mod Metadata + Security/UX Improvements**
+
+#### New Features / Improvements:
+- ✅ Docker Desktop support (`Dockerfile`, `docker-compose.yml`, `.dockerignore`)
+- ✅ Platform-agnostic executable resolution (Windows/Linux) via `backend/platform.js`
+- ✅ Clear Docker/Linux environment warning banner in UI (`/api/env`)
+- ✅ Mod metadata: **version**, **size**, **thumbnail**, **game version** (via stable `__NEXT_DATA__` parsing)
+- ✅ Mod metadata refresh (per mod + refresh all) + TTL/`lastFetchedAt`
+- ✅ Better server status payload (`lastExit`, `lastStartAt`, `lastStopRequestedAt`, `lastError`)
+- ✅ Rate-limiting on auth endpoints + stricter role guards for server/mod/config actions
+- ✅ Toast notifications + skeleton loader in Mod Manager
+
+---
+
 ### Version 3.2.2 (2025-12-25) 🔓
 **Bug Fix - Public System Info Endpoints**
 
