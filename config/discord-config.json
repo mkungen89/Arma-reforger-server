@@ -1,0 +1,17 @@
+{
+  "webhookUrl": "",
+  "enabled": false,
+  "notifications": {
+    "serverStart": true,
+    "serverStop": true,
+    "serverCrash": true,
+    "playerJoin": false,
+    "playerLeave": false,
+    "playerKick": true,
+    "playerBan": true,
+    "taskComplete": true,
+    "taskFailed": true,
+    "backupComplete": true
+  },
+  "mentionRole": ""
+}

@@ -12,7 +12,8 @@
       "Bash(npm run build:*)",
       "Bash(npm install:*)",
       "Bash(ls:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(node:*)"
     ]
   }
 }
