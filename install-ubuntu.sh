@@ -37,6 +37,14 @@ PANEL_AUTH_USER="${PANEL_AUTH_USER:-admin}"
 PANEL_AUTH_PASS="${PANEL_AUTH_PASS:-}"
 PANEL_ALLOW_IPS="${PANEL_ALLOW_IPS:-}"
 PUBLIC_API_RPM="${PUBLIC_API_RPM:-300}"
+ENABLE_FLUTE="${ENABLE_FLUTE:-0}"
+FLUTE_PATH="${FLUTE_PATH:-/opt/flute}"
+FLUTE_DOMAIN="${FLUTE_DOMAIN:-}"
+FLUTE_DB_ENGINE="${FLUTE_DB_ENGINE:-mariadb}"  # mariadb|postgres
+FLUTE_DB_NAME="${FLUTE_DB_NAME:-flute}"
+FLUTE_DB_USER="${FLUTE_DB_USER:-flute}"
+FLUTE_DB_PASS="${FLUTE_DB_PASS:-}"
+FLUTE_ADMIN_EMAIL="${FLUTE_ADMIN_EMAIL:-}"
 
 is_tty() { [ -t 0 ] && [ -t 1 ]; }
 
@@ -158,6 +166,17 @@ if [ "$ENABLE_NGINX" = "1" ] && [ -z "$PANEL_DOMAIN" ]; then
   fi
 fi
 
+# Wizard: Flute install (optional)
+if is_tty && [ "$ENABLE_FLUTE" = "0" ] && [ -z "$FLUTE_DOMAIN" ]; then
+  if [ "$(prompt_yes_no 'Install Flute CMS website (recommended)?' 1)" = "1" ]; then
+    ENABLE_FLUTE=1
+    FLUTE_DOMAIN="$(prompt 'Flute site domain (e.g. site.example.com)')"
+    if [ -z "$FLUTE_ADMIN_EMAIL" ]; then
+      FLUTE_ADMIN_EMAIL="$(prompt 'Flute admin email (for future setup)' '')"
+    fi
+  fi
+fi
+
 echo "Installation paths:"
 echo "  Server: $SERVER_PATH"
 echo "  SteamCMD: $STEAMCMD_PATH"
@@ -166,6 +185,7 @@ echo "  User: $INSTALL_USER"
   echo "  Web UI Port: $WEB_UI_PORT"
   echo "  Server Port: $SERVER_PORT"
   echo "  Nginx: $ENABLE_NGINX (SSL: $ENABLE_SSL)"
+  echo "  Flute CMS: $ENABLE_FLUTE (Domain: ${FLUTE_DOMAIN:-n/a}, Path: $FLUTE_PATH, DB: $FLUTE_DB_ENGINE)"
 echo ""
 
 # Update system
@@ -176,6 +196,58 @@ apt-get upgrade -y
 # Install dependencies
 echo "[2/10] Installing dependencies..."
 apt-get install -y curl wget git build-essential lib32gcc-s1 software-properties-common rsync ca-certificates gnupg
+
+# Flute prerequisites (optional): PHP 8.2+, DB, Composer
+if [ "$ENABLE_FLUTE" = "1" ]; then
+    echo "Installing Flute CMS prerequisites (PHP/DB/Composer)..."
+
+    # DB engine
+    if [ "$FLUTE_DB_ENGINE" = "postgres" ]; then
+        apt-get install -y postgresql postgresql-contrib
+    else
+        # default MariaDB
+        apt-get install -y mariadb-server mariadb-client
+    fi
+
+    # PHP 8.2+
+    if command -v php >/dev/null 2>&1; then
+        PHP_VER="$(php -r 'echo PHP_MAJOR_VERSION.\".\".PHP_MINOR_VERSION;')"
+    else
+        PHP_VER="0.0"
+    fi
+
+    need_php82=1
+    if [ "$PHP_VER" != "0.0" ]; then
+        php_major="${PHP_VER%%.*}"
+        php_minor="${PHP_VER#*.}"
+        if [ "$php_major" -gt 8 ] || { [ "$php_major" -eq 8 ] && [ "$php_minor" -ge 2 ]; }; then
+            need_php82=0
+        fi
+    fi
+
+    if [ "$need_php82" = "1" ]; then
+        echo "PHP >= 8.2 not detected. Installing PHP 8.2 packages..."
+        # Try native packages first
+        if ! apt-get install -y php8.2-cli php8.2-fpm php8.2-mysql php8.2-pgsql php8.2-xml php8.2-mbstring php8.2-curl php8.2-zip php8.2-gd php8.2-intl; then
+            echo "php8.2 packages not available. Trying ondrej/php PPA..."
+            apt-get install -y lsb-release apt-transport-https
+            add-apt-repository -y ppa:ondrej/php || true
+            apt-get update
+            apt-get install -y php8.2-cli php8.2-fpm php8.2-mysql php8.2-pgsql php8.2-xml php8.2-mbstring php8.2-curl php8.2-zip php8.2-gd php8.2-intl
+        fi
+    fi
+
+    # Composer (prefer apt for simplicity)
+    if ! command -v composer >/dev/null 2>&1; then
+        apt-get install -y composer || true
+    fi
+    if ! command -v composer >/dev/null 2>&1; then
+        echo "Installing Composer (fallback installer)..."
+        curl -fsSL https://getcomposer.org/installer -o /tmp/composer-setup.php
+        php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
+        rm -f /tmp/composer-setup.php
+    fi
+fi
 
 # Optional: install nginx/ssl packages early (idempotent)
 if [ "$ENABLE_NGINX" = "1" ] || [ "$ENABLE_SSL" = "1" ]; then
@@ -258,6 +330,12 @@ echo "[8/10] Setting up Web UI..."
 mkdir -p "$WEB_UI_PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# If Flute is added as a git submodule, make sure it's initialized.
+if [ "$ENABLE_FLUTE" = "1" ] && [ -f "$SCRIPT_DIR/.gitmodules" ]; then
+    echo "Initializing git submodules (Flute)..."
+    git -C "$SCRIPT_DIR" submodule update --init --recursive || true
+fi
 
 # Preserve runtime data directories across updates
 mkdir -p "$WEB_UI_PATH/config" "$WEB_UI_PATH/backups" "$WEB_UI_PATH/mods"
@@ -388,6 +466,118 @@ EOF
 systemctl daemon-reload
 systemctl enable arma-reforger-webui.service
 systemctl restart arma-reforger-webui.service
+
+# Optional: Flute CMS deploy
+if [ "$ENABLE_FLUTE" = "1" ]; then
+    echo "Deploying Flute CMS..."
+
+    # Ensure code exists (prefer submodule in this repo)
+    if [ -d "$SCRIPT_DIR/flute" ] && [ -f "$SCRIPT_DIR/flute/composer.json" ]; then
+        mkdir -p "$FLUTE_PATH"
+        rsync -a --delete "$SCRIPT_DIR/flute/" "$FLUTE_PATH/"
+    else
+        echo "Flute not found in repo. Cloning..."
+        if [ -d "$FLUTE_PATH/.git" ]; then
+            git -C "$FLUTE_PATH" fetch --depth 1 origin main || true
+            git -C "$FLUTE_PATH" checkout main || true
+            git -C "$FLUTE_PATH" pull --ff-only || true
+        else
+            rm -rf "$FLUTE_PATH"
+            git clone --depth 1 https://github.com/Flute-CMS/cms.git "$FLUTE_PATH"
+        fi
+    fi
+
+    # Create DB credentials (only if missing)
+    FLUTE_CREDS_FILE="$WEB_UI_PATH/config/flute-db.json"
+    if [ ! -f "$FLUTE_CREDS_FILE" ]; then
+        if [ -z "$FLUTE_DB_PASS" ]; then
+            FLUTE_DB_PASS="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 28)"
+        fi
+
+        if [ "$FLUTE_DB_ENGINE" = "postgres" ]; then
+            systemctl enable postgresql || true
+            systemctl restart postgresql || true
+            sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = '${FLUTE_DB_NAME}'" | grep -q 1 || sudo -u postgres createdb "${FLUTE_DB_NAME}"
+            sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${FLUTE_DB_USER}'" | grep -q 1 || sudo -u postgres psql -c "CREATE USER \"${FLUTE_DB_USER}\" WITH PASSWORD '${FLUTE_DB_PASS}';"
+            sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"${FLUTE_DB_NAME}\" TO \"${FLUTE_DB_USER}\";"
+        else
+            systemctl enable mariadb || true
+            systemctl restart mariadb || true
+            mysql -uroot -e "CREATE DATABASE IF NOT EXISTS \`${FLUTE_DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+            mysql -uroot -e "CREATE USER IF NOT EXISTS '${FLUTE_DB_USER}'@'localhost' IDENTIFIED BY '${FLUTE_DB_PASS}';"
+            mysql -uroot -e "GRANT ALL PRIVILEGES ON \`${FLUTE_DB_NAME}\`.* TO '${FLUTE_DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
+        fi
+
+        cat > "$FLUTE_CREDS_FILE" <<EOF
+{
+  "engine": "$FLUTE_DB_ENGINE",
+  "host": "127.0.0.1",
+  "database": "$FLUTE_DB_NAME",
+  "username": "$FLUTE_DB_USER",
+  "password": "$FLUTE_DB_PASS"
+}
+EOF
+        chmod 600 "$FLUTE_CREDS_FILE"
+        chown "$INSTALL_USER:$INSTALL_USER" "$FLUTE_CREDS_FILE"
+    else
+        echo "Flute DB credentials already exist at $FLUTE_CREDS_FILE (not overwriting)."
+    fi
+
+    # Install dependencies (composer)
+    if command -v composer >/dev/null 2>&1; then
+        (cd "$FLUTE_PATH" && composer install --no-dev --optimize-autoloader) || \
+            echo "WARNING: Composer install failed. You may need to run it manually inside $FLUTE_PATH."
+    else
+        echo "WARNING: composer not found. Skipping composer install."
+    fi
+
+    # Nginx php-fpm vhost (requires nginx)
+    if [ "$ENABLE_NGINX" != "1" ]; then
+        echo "NOTE: Flute is installed but nginx is disabled. Enable nginx to serve Flute via domain."
+    else
+        if [ -z "$FLUTE_DOMAIN" ]; then
+            echo "WARNING: ENABLE_FLUTE=1 but FLUTE_DOMAIN is empty. Skipping nginx vhost."
+        else
+            # Find php-fpm socket
+            PHP_FPM_SOCK=""
+            if [ -S "/run/php/php8.2-fpm.sock" ]; then
+                PHP_FPM_SOCK="/run/php/php8.2-fpm.sock"
+            else
+                PHP_FPM_SOCK="$(ls -1 /run/php/php*-fpm.sock 2>/dev/null | head -n 1 || true)"
+            fi
+
+            if [ -z "$PHP_FPM_SOCK" ]; then
+                echo "WARNING: php-fpm socket not found. Cannot configure nginx for Flute."
+            else
+                cat > /etc/nginx/sites-available/flute-cms <<EOF
+server {
+    listen 80;
+    server_name $FLUTE_DOMAIN;
+    root $FLUTE_PATH/public;
+
+    index index.php index.html;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location ~ \\.php\$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:$PHP_FPM_SOCK;
+    }
+
+    location ~ /\\.ht {
+        deny all;
+    }
+}
+EOF
+                ln -sf /etc/nginx/sites-available/flute-cms /etc/nginx/sites-enabled/flute-cms
+                nginx -t
+                systemctl restart nginx
+            fi
+        fi
+    fi
+fi
 
 # Optional: Nginx reverse proxy + HTTPS
 if [ "$ENABLE_NGINX" = "1" ]; then
@@ -561,4 +751,17 @@ if [ "$ENABLE_NGINX" = "1" ]; then
         echo "Panel Basic Auth user: $PANEL_AUTH_USER"
         echo "Panel Basic Auth pass: $PANEL_AUTH_PASS"
     fi
+fi
+
+if [ "$ENABLE_FLUTE" = "1" ]; then
+    echo ""
+    echo "Flute CMS:"
+    if [ -n "$FLUTE_DOMAIN" ]; then
+        echo "  Site: http://${FLUTE_DOMAIN}/"
+    else
+        echo "  Site domain not set (FLUTE_DOMAIN)."
+    fi
+    echo "  Flute path: $FLUTE_PATH"
+    echo "  DB credentials saved to: $WEB_UI_PATH/config/flute-db.json"
+    echo "  IMPORTANT: Save these credentials somewhere safe."
 fi

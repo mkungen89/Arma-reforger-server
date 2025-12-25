@@ -1,0 +1,3 @@
+[submodule "flute"]
+	path = flute
+	url = https://github.com/Flute-CMS/cms.git
