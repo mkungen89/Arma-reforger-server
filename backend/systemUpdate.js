@@ -10,7 +10,17 @@ const execPromise = promisify(exec);
 
 // GitHub repository info
 const GITHUB_REPO = 'mkungen89/Arma-reforger-server';
-const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/commits/main`;
+
+// Get current branch
+async function getCurrentBranch() {
+    try {
+        const { stdout } = await execPromise('git rev-parse --abbrev-ref HEAD');
+        return stdout.trim();
+    } catch (error) {
+        console.error('Error getting current branch:', error);
+        return 'main'; // fallback to main
+    }
+}
 
 // Get current version from package.json
 async function getCurrentVersion() {
@@ -36,9 +46,10 @@ async function getCurrentCommit() {
 }
 
 // Get latest commit from GitHub
-async function getLatestCommit() {
+async function getLatestCommit(branch = 'main') {
     try {
-        const response = await axios.get(GITHUB_API, {
+        const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/commits/${branch}`;
+        const response = await axios.get(apiUrl, {
             headers: {
                 'User-Agent': 'Arma-Reforger-Server-Manager'
             }
@@ -50,7 +61,7 @@ async function getLatestCommit() {
             date: response.data.commit.author.date
         };
     } catch (error) {
-        console.error('Error fetching latest commit from GitHub:', error);
+        console.error(`Error fetching latest commit from GitHub (branch: ${branch}):`, error.message);
         return null;
     }
 }
@@ -58,15 +69,17 @@ async function getLatestCommit() {
 // Check for updates
 router.get('/system/check-update', async (req, res) => {
     try {
+        const currentBranch = await getCurrentBranch();
         const currentCommit = await getCurrentCommit();
-        const latestCommit = await getLatestCommit();
+        const latestCommit = await getLatestCommit(currentBranch);
         const currentVersion = await getCurrentVersion();
 
         if (!currentCommit || !latestCommit) {
             return res.json({
                 updateAvailable: false,
-                error: 'Could not check for updates',
-                currentVersion
+                error: 'Could not check for updates. Make sure this is a git repository.',
+                currentVersion,
+                currentBranch
             });
         }
 
@@ -102,13 +115,16 @@ router.post('/system/update', async (req, res) => {
             });
         }
 
+        // Get current branch
+        const currentBranch = await getCurrentBranch();
+
         // Stash any local changes
         console.log('Stashing local changes...');
         await execPromise('git stash');
 
         // Pull latest changes
-        console.log('Pulling latest changes from GitHub...');
-        const { stdout: pullOutput } = await execPromise('git pull origin main');
+        console.log(`Pulling latest changes from GitHub (branch: ${currentBranch})...`);
+        const { stdout: pullOutput } = await execPromise(`git pull origin ${currentBranch}`);
 
         // Install/update npm dependencies in root
         console.log('Installing npm dependencies...');
@@ -162,13 +178,7 @@ router.get('/system/info', async (req, res) => {
         }
 
         // Get branch
-        let branch = 'main';
-        try {
-            const { stdout } = await execPromise('git rev-parse --abbrev-ref HEAD');
-            branch = stdout.trim();
-        } catch (error) {
-            // ignore
-        }
+        const branch = await getCurrentBranch();
 
         res.json({
             version,

@@ -501,6 +501,17 @@ MIT License - se LICENSE fil för detaljer
 
 ## Changelog
 
+### Version 3.2.1 (2025-12-25) 🔧
+**Bug Fix - Auto-Update Branch Detection**
+
+#### Fixes:
+- ✅ Fixed auto-update system to detect current git branch automatically
+- ✅ Supports both `main` and `master` branches
+- ✅ Better error messages when git repository is not initialized
+- ✅ Improved GitHub API error handling
+
+---
+
 ### Version 3.2.0 (2025-12-25) ⚙️
 **Complete Server Configuration System**
 
