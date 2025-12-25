@@ -3,7 +3,8 @@
 # Arma Reforger Server Manager - Ubuntu Installation Script
 # This script installs everything needed for the server and web UI on Ubuntu
 
-set -euo pipefail
+set -uo pipefail
+# Note: Removed -e (exit on error) to allow better error logging
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -73,20 +74,8 @@ log_warn() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: $*" | tee -a "$LOG_FILE"
 }
 
-# Error trap - catch errors and log them
-error_exit() {
-    local line_no=$1
-    log_error "Script failed at line $line_no"
-    log_error "Installation failed. Check $ERROR_LOG for details."
-    echo ""
-    echo "❌ Installation FAILED!"
-    echo "📄 Full log: $LOG_FILE"
-    echo "🔴 Errors: $ERROR_LOG"
-    echo ""
-    exit 1
-}
-
-trap 'error_exit $LINENO' ERR
+# Note: Error trap disabled to show actual error messages instead of just line numbers
+# Commands will now show their real error output which gets logged to install.log
 
 is_tty() { [ -t 0 ] && [ -t 1 ]; }
 
