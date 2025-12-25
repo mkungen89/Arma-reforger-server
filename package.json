@@ -1,6 +1,6 @@
 {
   "name": "arma-reforger-server-manager",
-  "version": "3.5.0",
+  "version": "3.5.1",
   "description": "Arma Reforger Server Manager (Node API/engine) + Flute CMS UI integration",
   "main": "backend/server.js",
   "scripts": {

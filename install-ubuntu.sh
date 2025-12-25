@@ -779,4 +779,11 @@ if [ "$ENABLE_FLUTE" = "1" ]; then
     echo "  Flute path: $FLUTE_PATH"
     echo "  DB credentials saved to: $WEB_UI_PATH/config/flute-db.json"
     echo "  IMPORTANT: Save these credentials somewhere safe."
+    echo ""
+    echo "NEXT STEP (inside Flute):"
+    echo "  1) Run Flute web installer: http://${FLUTE_DOMAIN}/"
+    echo "  2) Enable the module: /admin/modules → install/activate \"Arma Reforger Manager\""
+    echo "  3) Open:"
+    echo "     - Public Battlelog: http://${FLUTE_DOMAIN}/battlelog"
+    echo "     - Admin:           http://${FLUTE_DOMAIN}/arma/login"
 fi
