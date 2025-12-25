@@ -3,6 +3,9 @@ const router = express.Router();
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const sessionStore = require('./sessionStore');
+const { getSteamLoginUrl, verifySteamOpenId } = require('./steamOpenId');
+const AuditLogger = require('./auditLogger');
 
 // Users database
 const usersDbPath = path.join(__dirname, '../config/users.json');
@@ -43,14 +46,6 @@ function saveUsersDb() {
 
 loadUsersDb();
 
-// Active sessions (in-memory for now)
-const activeSessions = new Map();
-
-// Generate session token
-function generateSessionToken() {
-    return require('crypto').randomBytes(32).toString('hex');
-}
-
 // Middleware to check authentication
 function requireAuth(req, res, next) {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -59,16 +54,10 @@ function requireAuth(req, res, next) {
         return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const session = activeSessions.get(token);
+    const session = sessionStore.getSession(token);
 
     if (!session) {
         return res.status(401).json({ error: 'Invalid or expired session' });
-    }
-
-    // Check if session expired (24 hours)
-    if (Date.now() - session.createdAt > 24 * 60 * 60 * 1000) {
-        activeSessions.delete(token);
-        return res.status(401).json({ error: 'Session expired' });
     }
 
     req.user = session.user;
@@ -174,16 +163,12 @@ router.post('/auth/steam/verify', async (req, res) => {
             }
         }
 
-        // Create session
-        const token = generateSessionToken();
-        activeSessions.set(token, {
-            user: {
-                steamId: user.steamId,
-                displayName: displayName,
-                avatarUrl: avatarUrl,
-                role: user.role
-            },
-            createdAt: Date.now()
+        // Create session using sessionStore
+        const token = sessionStore.createSession({
+            steamId: user.steamId,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            role: user.role
         });
 
         res.json({
@@ -203,8 +188,141 @@ router.post('/auth/steam/verify', async (req, res) => {
     }
 });
 
+// NEW: Steam OpenID login - Step 1: Get login URL
+router.get('/auth/steam/openid/start', (req, res) => {
+    try {
+        const returnUrl = req.query.returnUrl || `${req.protocol}://${req.get('host')}/api/auth/steam/openid/callback`;
+        const realm = req.query.realm || `${req.protocol}://${req.get('host')}`;
+
+        const steamUrl = getSteamLoginUrl(returnUrl, realm);
+        res.json({ success: true, url: steamUrl });
+    } catch (error) {
+        console.error('Steam OpenID start error:', error);
+        res.status(500).json({ error: 'Failed to generate Steam login URL' });
+    }
+});
+
+// NEW: Steam OpenID login - Step 2: Handle callback
+router.get('/auth/steam/openid/callback', async (req, res) => {
+    try {
+        // Verify the Steam OpenID response
+        const steamId = await verifySteamOpenId(req.query);
+
+        if (!steamId) {
+            return res.status(401).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Authentication Failed</title></head>
+                <body>
+                    <h1>Authentication Failed</h1>
+                    <p>Could not verify your Steam identity. Please try again.</p>
+                    <a href="/arma/login">Return to login</a>
+                </body>
+                </html>
+            `);
+        }
+
+        // Check if user is authorized
+        const user = usersDatabase.users.find(u => u.steamId === steamId);
+
+        if (!user) {
+            return res.status(403).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Access Denied</title></head>
+                <body>
+                    <h1>Access Denied</h1>
+                    <p>Your Steam ID (${steamId}) is not authorized to access this server.</p>
+                    <p>Please contact the server administrator.</p>
+                    <a href="/arma/login">Return to login</a>
+                </body>
+                </html>
+            `);
+        }
+
+        // Fetch user profile from Steam API
+        const apiKey = getSteamApiKey();
+        let displayName = user.displayName;
+        let avatarUrl = '';
+
+        if (apiKey) {
+            try {
+                const steamResponse = await axios.get(
+                    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${apiKey}&steamids=${steamId}`,
+                    { timeout: 5000 }
+                );
+
+                if (steamResponse.data.response.players.length > 0) {
+                    const player = steamResponse.data.response.players[0];
+                    displayName = player.personaname;
+                    avatarUrl = player.avatarfull;
+
+                    // Update user info
+                    user.displayName = displayName;
+                    user.avatarUrl = avatarUrl;
+                    user.lastLogin = new Date().toISOString();
+                    saveUsersDb();
+                }
+            } catch (error) {
+                console.error('Error fetching Steam profile:', error);
+            }
+        }
+
+        // Create session using sessionStore
+        const token = sessionStore.createSession({
+            steamId: user.steamId,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            role: user.role
+        });
+
+        // Audit log
+        AuditLogger.logAuthAction('login', { steamId: user.steamId, displayName, role: user.role }, { method: 'steam_openid' });
+
+        // Redirect to login page with token in URL fragment
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Login Successful</title></head>
+            <body>
+                <h1>Login Successful</h1>
+                <p>Redirecting...</p>
+                <script>
+                    // Store token and redirect
+                    localStorage.setItem('arma_api_token', '${token}');
+                    window.location.href = '/arma';
+                </script>
+            </body>
+            </html>
+        `);
+
+    } catch (error) {
+        console.error('Steam OpenID callback error:', error);
+        res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Error</title></head>
+            <body>
+                <h1>Authentication Error</h1>
+                <p>An error occurred during authentication. Please try again.</p>
+                <a href="/arma/login">Return to login</a>
+            </body>
+            </html>
+        `);
+    }
+});
+
 // Simple login with Steam ID (for development/testing)
+// DEPRECATED: Set DISABLE_STEAMID_LOGIN=1 in production
 router.post('/auth/steam/login', async (req, res) => {
+    // Check if this endpoint is disabled
+    if (process.env.DISABLE_STEAMID_LOGIN === '1') {
+        return res.status(403).json({
+            error: 'SteamID login is disabled. Please use Steam OpenID login.',
+            hint: 'Use GET /api/auth/steam/openid/start to get the Steam login URL'
+        });
+    }
+
     const { steamId } = req.body;
 
     if (!steamId) {
@@ -248,16 +366,12 @@ router.post('/auth/steam/login', async (req, res) => {
         }
     }
 
-    // Create session
-    const token = generateSessionToken();
-    activeSessions.set(token, {
-        user: {
-            steamId: user.steamId,
-            displayName: displayName,
-            avatarUrl: avatarUrl,
-            role: user.role
-        },
-        createdAt: Date.now()
+    // Create session using sessionStore
+    const token = sessionStore.createSession({
+        steamId: user.steamId,
+        displayName: displayName,
+        avatarUrl: avatarUrl,
+        role: user.role
     });
 
     res.json({
@@ -280,7 +394,11 @@ router.get('/auth/me', requireAuth, (req, res) => {
 // Logout
 router.post('/auth/logout', requireAuth, (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    activeSessions.delete(token);
+
+    // Audit log
+    AuditLogger.logAuthAction('logout', req.user, {});
+
+    sessionStore.deleteSession(token);
     res.json({ success: true });
 });
 
@@ -339,6 +457,9 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
     usersDatabase.users.push(newUser);
     saveUsersDb();
 
+    // Audit log
+    AuditLogger.logUserAction('add', req.user, steamId, { role, displayName });
+
     res.json({ success: true, user: newUser });
 });
 
@@ -365,10 +486,14 @@ router.put('/users/:steamId', requireAuth, requireAdmin, (req, res) => {
         }
     }
 
+    const oldRole = user.role;
     user.role = role;
     user.updatedAt = new Date().toISOString();
     user.updatedBy = req.user.steamId;
     saveUsersDb();
+
+    // Audit log
+    AuditLogger.logUserAction('update', req.user, steamId, { oldRole, newRole: role });
 
     res.json({ success: true, user });
 });
@@ -402,11 +527,13 @@ router.delete('/users/:steamId', requireAuth, requireAdmin, (req, res) => {
     saveUsersDb();
 
     // Remove active sessions for this user
-    for (const [token, session] of activeSessions.entries()) {
-        if (session.user.steamId === steamId) {
-            activeSessions.delete(token);
-        }
-    }
+    sessionStore.deleteSessionsBySteamId(steamId);
+
+    // Audit log
+    AuditLogger.logUserAction('remove', req.user, steamId, {
+        displayName: user.displayName,
+        role: user.role
+    });
 
     res.json({ success: true });
 });

@@ -15,6 +15,7 @@ config/discord-config.json
 config/scheduled-tasks.json
 config/battlelog.json
 config/sso-clients.json
+config/sessions.json
 
 # Local assistant/IDE state
 .claude/settings.local.json
@@ -51,5 +52,20 @@ tmp-*.html
 
 # Backups (runtime artifacts)
 backups/
+
+# Flute CMS runtime files (if Flute is cloned locally, not as submodule)
+flute/storage/
+flute/bootstrap/cache/
+flute/vendor/
+flute/.env
+flute/public/uploads/
+flute/public/storage
+
+# Flute database credentials
+config/flute-db.json
+
+# Test coverage
+coverage/
+*.lcov
 
 # NPM (lockfiles SHOULD be committed for reproducible + safer installs)

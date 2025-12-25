@@ -9,6 +9,7 @@ const { resolveSteamCmdExecutable, resolveServerExecutable, isWindows, looksLike
 const { createRateLimiter } = require('./rateLimit');
 const { isValidInternalRequest } = require('./internalApiKey');
 const { sendApiError } = require('./apiError');
+const AuditLogger = require('./auditLogger');
 
 // Import routers
 const modManager = require('./modManager');
@@ -68,6 +69,16 @@ if (process.env.SERVE_LEGACY_UI === '1') {
         console.warn('[server] SERVE_LEGACY_UI=1 but frontend/build does not exist. Skipping static serve.');
     }
 }
+
+// Health check endpoint (no auth, no rate limit) for monitoring/systemd
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        version: require('../package.json').version || '1.0.0'
+    });
+});
 
 // Rate-limit auth endpoints (public)
 const authLimiter = createRateLimiter({
@@ -322,8 +333,10 @@ app.get('/api/env', (req, res) => {
 });
 
 // Start server
-app.post('/api/server/start', (req, res) => {
+app.post('/api/server/start', requireAuth, requireRole(['admin', 'gm']), (req, res) => {
     if (serverStatus === 'running' && serverProcess) {
+        // Audit log
+        AuditLogger.logServerAction('start', req.user, { result: 'already_running' });
         return res.json({ success: true, message: 'Server is already running', pid: serverProcess.pid });
     }
 
@@ -425,18 +438,28 @@ app.post('/api/server/start', (req, res) => {
         });
 
         broadcastToClients({ type: 'status', data: { status: 'running' } });
+
+        // Audit log
+        AuditLogger.logServerAction('start', req.user, { result: 'success', pid: serverProcess.pid });
+
         res.json({ success: true, message: 'Server started successfully' });
 
     } catch (error) {
         addLog(`Failed to start server: ${error.message}`, 'error');
         lastError = { message: error.message, at: new Date().toISOString() };
+
+        // Audit log
+        AuditLogger.logServerAction('start', req.user, { result: 'error', error: error.message });
+
         return sendApiError(res, 500, 'SERVER_START_FAILED', 'Failed to start server', error.message);
     }
 });
 
 // Stop server
-app.post('/api/server/stop', (req, res) => {
+app.post('/api/server/stop', requireAuth, requireRole(['admin', 'gm']), (req, res) => {
     if (serverStatus !== 'running' || !serverProcess) {
+        // Audit log
+        AuditLogger.logServerAction('stop', req.user, { result: 'already_stopped' });
         return res.json({ success: true, message: 'Server is already stopped' });
     }
 
@@ -451,24 +474,37 @@ app.post('/api/server/stop', (req, res) => {
             }
         }, 10000);
 
+        // Audit log
+        AuditLogger.logServerAction('stop', req.user, { result: 'success' });
+
         res.json({ success: true, message: 'Server stop initiated' });
     } catch (error) {
         addLog(`Failed to stop server: ${error.message}`, 'error');
+
+        // Audit log
+        AuditLogger.logServerAction('stop', req.user, { result: 'error', error: error.message });
+
         return sendApiError(res, 500, 'SERVER_STOP_FAILED', 'Failed to stop server', error.message);
     }
 });
 
 // Restart server
-app.post('/api/server/restart', async (req, res) => {
+app.post('/api/server/restart', requireAuth, requireRole(['admin', 'gm']), async (req, res) => {
     try {
         if (serverStatus === 'running' && serverProcess) {
             serverProcess.kill('SIGTERM');
             await new Promise(resolve => setTimeout(resolve, 3000));
         }
 
+        // Audit log
+        AuditLogger.logServerAction('restart', req.user, { result: 'initiated' });
+
         // Trigger start via internal call
         req.app.handle({ ...req, method: 'POST', url: '/api/server/start' }, res);
     } catch (error) {
+        // Audit log
+        AuditLogger.logServerAction('restart', req.user, { result: 'error', error: error.message });
+
         return sendApiError(res, 500, 'SERVER_RESTART_FAILED', 'Failed to restart server', error.message);
     }
 });
@@ -480,9 +516,21 @@ app.get('/api/logs', (req, res) => {
 });
 
 // Clear logs
-app.delete('/api/logs', (req, res) => {
+app.delete('/api/logs', requireAuth, requireRole(['admin']), (req, res) => {
     serverLogs = [];
+
+    // Audit log
+    AuditLogger.logServerAction('logs.clear', req.user, {});
+
     res.json({ success: true });
+});
+
+// Get audit logs (admin only)
+app.get('/api/audit-logs', requireAuth, requireRole(['admin']), (req, res) => {
+    const limit = parseInt(req.query.limit) || 100;
+    const filter = req.query.filter || null;
+    const logs = AuditLogger.getRecentEntries(limit, filter);
+    res.json({ success: true, logs });
 });
 
 // Get config
@@ -491,10 +539,17 @@ app.get('/api/config', (req, res) => {
 });
 
 // Update config
-app.put('/api/config', requireRole(['admin', 'gm']), (req, res) => {
+app.put('/api/config', requireAuth, requireRole(['admin', 'gm']), (req, res) => {
     try {
         config = { ...config, ...req.body };
         saveConfig();
+
+        // Audit log (sanitize sensitive fields)
+        const sanitizedChanges = { ...req.body };
+        if (sanitizedChanges.steamApiKey) sanitizedChanges.steamApiKey = '***';
+        if (sanitizedChanges.password) sanitizedChanges.password = '***';
+        AuditLogger.logConfigAction('update', req.user, sanitizedChanges);
+
         res.json({ success: true, config });
     } catch (error) {
         return sendApiError(res, 500, 'CONFIG_SAVE_FAILED', 'Failed to save config', error.message);
@@ -502,7 +557,7 @@ app.put('/api/config', requireRole(['admin', 'gm']), (req, res) => {
 });
 
 // Update server (via SteamCMD)
-app.post('/api/server/update', (req, res) => {
+app.post('/api/server/update', requireAuth, requireRole(['admin', 'gm']), (req, res) => {
     if (serverStatus === 'running') {
         return sendApiError(res, 400, 'SERVER_RUNNING', 'Please stop the server before updating');
     }
@@ -540,13 +595,23 @@ app.post('/api/server/update', (req, res) => {
         updateProcess.on('exit', (code) => {
             if (code === 0) {
                 addLog('Server updated successfully', 'info');
+                // Audit log
+                AuditLogger.logServerAction('update', req.user, { result: 'success' });
             } else {
                 addLog(`Update failed with code ${code}`, 'error');
+                // Audit log
+                AuditLogger.logServerAction('update', req.user, { result: 'error', exitCode: code });
             }
         });
 
+        // Audit log
+        AuditLogger.logServerAction('update', req.user, { result: 'initiated' });
+
         res.json({ success: true, message: 'Update started' });
     } catch (error) {
+        // Audit log
+        AuditLogger.logServerAction('update', req.user, { result: 'error', error: error.message });
+
         return sendApiError(res, 500, 'SERVER_UPDATE_FAILED', 'Failed to start update', error.message);
     }
 });

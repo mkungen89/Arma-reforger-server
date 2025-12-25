@@ -40,7 +40,9 @@ PUBLIC_API_RPM="${PUBLIC_API_RPM:-300}"
 ENABLE_FLUTE="${ENABLE_FLUTE:-1}"
 FLUTE_PATH="${FLUTE_PATH:-/opt/flute}"
 FLUTE_DOMAIN="${FLUTE_DOMAIN:-}"
-FLUTE_DB_ENGINE="${FLUTE_DB_ENGINE:-mariadb}"  # mariadb|postgres
+FLUTE_DB_ENGINE="${FLUTE_DB_ENGINE:-mariadb}"  # mariadb|postgres|supabase
+FLUTE_DB_HOST="${FLUTE_DB_HOST:-127.0.0.1}"
+FLUTE_DB_PORT="${FLUTE_DB_PORT:-}"
 FLUTE_DB_NAME="${FLUTE_DB_NAME:-flute}"
 FLUTE_DB_USER="${FLUTE_DB_USER:-flute}"
 FLUTE_DB_PASS="${FLUTE_DB_PASS:-}"
@@ -180,6 +182,35 @@ if is_tty && [ "$ENABLE_FLUTE" = "1" ] && [ -z "$FLUTE_DOMAIN" ]; then
   if [ -z "$FLUTE_ADMIN_EMAIL" ]; then
     FLUTE_ADMIN_EMAIL="$(prompt 'Flute admin email (for future setup)' '')"
   fi
+
+  # Database selection
+  echo ""
+  echo "Database options for Flute:"
+  echo "  1) MariaDB (local, auto-installed)"
+  echo "  2) PostgreSQL (local, auto-installed)"
+  echo "  3) Supabase (cloud PostgreSQL, managed service)"
+  while true; do
+    read -r -p "Choose database [1-3]: " db_choice
+    case "$db_choice" in
+      1) FLUTE_DB_ENGINE="mariadb"; break ;;
+      2) FLUTE_DB_ENGINE="postgres"; break ;;
+      3) FLUTE_DB_ENGINE="supabase"; break ;;
+      *) echo "Please enter 1, 2, or 3." ;;
+    esac
+  done
+
+  if [ "$FLUTE_DB_ENGINE" = "supabase" ]; then
+    echo ""
+    echo "Supabase setup - You need a Supabase project first:"
+    echo "  1. Go to https://supabase.com and create a project"
+    echo "  2. Find your connection details in Project Settings > Database"
+    echo ""
+    FLUTE_DB_HOST="$(prompt 'Supabase database host (e.g. db.xxxxx.supabase.co)')"
+    FLUTE_DB_PORT="$(prompt 'Database port' '5432')"
+    FLUTE_DB_NAME="$(prompt 'Database name' 'postgres')"
+    FLUTE_DB_USER="$(prompt 'Database user' 'postgres')"
+    FLUTE_DB_PASS="$(prompt 'Database password')"
+  fi
 fi
 
 echo "Installation paths:"
@@ -206,11 +237,17 @@ apt-get install -y curl wget git build-essential lib32gcc-s1 software-properties
 if [ "$ENABLE_FLUTE" = "1" ]; then
     echo "Installing Flute CMS prerequisites (PHP/DB/Composer)..."
 
-    # DB engine
-    if [ "$FLUTE_DB_ENGINE" = "postgres" ]; then
+    # DB engine (skip installation if using Supabase)
+    if [ "$FLUTE_DB_ENGINE" = "supabase" ]; then
+        echo "Using Supabase (cloud PostgreSQL) - skipping local database installation."
+        # Install PostgreSQL client tools only (for connection testing)
+        apt-get install -y postgresql-client
+    elif [ "$FLUTE_DB_ENGINE" = "postgres" ]; then
+        echo "Installing local PostgreSQL server..."
         apt-get install -y postgresql postgresql-contrib
     else
         # default MariaDB
+        echo "Installing local MariaDB server..."
         apt-get install -y mariadb-server mariadb-client
     fi
 
@@ -428,18 +465,19 @@ if command -v ufw &> /dev/null; then
     echo "Firewall rules added"
 fi
 
-# Create systemd service
-echo "Creating systemd service..."
+# Create systemd service for Node backend
+echo "Creating systemd service for Node backend..."
 LISTEN_HOST_ENV="0.0.0.0"
 TRUST_PROXY_ENV="0"
 if [ "$ENABLE_NGINX" = "1" ]; then
     LISTEN_HOST_ENV="127.0.0.1"
     TRUST_PROXY_ENV="1"
 fi
-cat > /etc/systemd/system/arma-reforger-webui.service <<EOF
+cat > /etc/systemd/system/arma-reforger-backend.service <<EOF
 [Unit]
-Description=Arma Reforger Server Manager Web UI
+Description=Arma Reforger Server Manager Backend API
 After=network.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -450,11 +488,27 @@ Environment=PORT=$WEB_UI_PORT
 Environment=LISTEN_HOST=$LISTEN_HOST_ENV
 Environment=TRUST_PROXY=$TRUST_PROXY_ENV
 Environment=PUBLIC_API_RPM=$PUBLIC_API_RPM
+Environment=DISABLE_STEAMID_LOGIN=1
 ExecStart=/usr/bin/node $WEB_UI_PATH/backend/server.js
 Restart=always
 RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=arma-backend
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$WEB_UI_PATH $SERVER_PATH
+CapabilityBoundingSet=
+
+# Resource limits
+LimitNOFILE=65536
+TasksMax=4096
 
 [Install]
 WantedBy=multi-user.target
@@ -462,8 +516,14 @@ EOF
 
 # Reload systemd and enable service
 systemctl daemon-reload
-systemctl enable arma-reforger-webui.service
-systemctl restart arma-reforger-webui.service
+systemctl enable arma-reforger-backend.service
+systemctl restart arma-reforger-backend.service
+
+# Remove old service name if it exists
+if systemctl is-enabled arma-reforger-webui.service >/dev/null 2>&1; then
+    systemctl stop arma-reforger-webui.service || true
+    systemctl disable arma-reforger-webui.service || true
+fi
 
 # Optional: Flute CMS deploy
 if [ "$ENABLE_FLUTE" = "1" ]; then
@@ -499,24 +559,50 @@ if [ "$ENABLE_FLUTE" = "1" ]; then
             FLUTE_DB_PASS="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 28)"
         fi
 
-        if [ "$FLUTE_DB_ENGINE" = "postgres" ]; then
+        if [ "$FLUTE_DB_ENGINE" = "supabase" ]; then
+            # Test Supabase connection
+            echo "Testing Supabase connection..."
+            export PGPASSWORD="$FLUTE_DB_PASS"
+            if psql -h "$FLUTE_DB_HOST" -p "${FLUTE_DB_PORT:-5432}" -U "$FLUTE_DB_USER" -d "$FLUTE_DB_NAME" -c "SELECT 1;" >/dev/null 2>&1; then
+                echo "✓ Supabase connection successful!"
+            else
+                echo "ERROR: Could not connect to Supabase. Please verify your credentials:"
+                echo "  Host: $FLUTE_DB_HOST"
+                echo "  Port: ${FLUTE_DB_PORT:-5432}"
+                echo "  Database: $FLUTE_DB_NAME"
+                echo "  User: $FLUTE_DB_USER"
+                exit 1
+            fi
+            unset PGPASSWORD
+
+            # Set actual engine to postgres for Flute config (Supabase uses PostgreSQL)
+            DB_ENGINE_FOR_FLUTE="postgres"
+        elif [ "$FLUTE_DB_ENGINE" = "postgres" ]; then
             systemctl enable postgresql || true
             systemctl restart postgresql || true
             sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = '${FLUTE_DB_NAME}'" | grep -q 1 || sudo -u postgres createdb "${FLUTE_DB_NAME}"
             sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${FLUTE_DB_USER}'" | grep -q 1 || sudo -u postgres psql -c "CREATE USER \"${FLUTE_DB_USER}\" WITH PASSWORD '${FLUTE_DB_PASS}';"
             sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"${FLUTE_DB_NAME}\" TO \"${FLUTE_DB_USER}\";"
+            DB_ENGINE_FOR_FLUTE="postgres"
+            FLUTE_DB_HOST="127.0.0.1"
+            FLUTE_DB_PORT="5432"
         else
+            # MariaDB
             systemctl enable mariadb || true
             systemctl restart mariadb || true
             mysql -uroot -e "CREATE DATABASE IF NOT EXISTS \`${FLUTE_DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
             mysql -uroot -e "CREATE USER IF NOT EXISTS '${FLUTE_DB_USER}'@'localhost' IDENTIFIED BY '${FLUTE_DB_PASS}';"
             mysql -uroot -e "GRANT ALL PRIVILEGES ON \`${FLUTE_DB_NAME}\`.* TO '${FLUTE_DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
+            DB_ENGINE_FOR_FLUTE="mariadb"
+            FLUTE_DB_HOST="127.0.0.1"
+            FLUTE_DB_PORT="3306"
         fi
 
         cat > "$FLUTE_CREDS_FILE" <<EOF
 {
-  "engine": "$FLUTE_DB_ENGINE",
-  "host": "127.0.0.1",
+  "engine": "$DB_ENGINE_FOR_FLUTE",
+  "host": "$FLUTE_DB_HOST",
+  "port": "${FLUTE_DB_PORT}",
   "database": "$FLUTE_DB_NAME",
   "username": "$FLUTE_DB_USER",
   "password": "$FLUTE_DB_PASS"
@@ -534,6 +620,28 @@ EOF
             echo "WARNING: Composer install failed. You may need to run it manually inside $FLUTE_PATH."
     else
         echo "WARNING: composer not found. Skipping composer install."
+    fi
+
+    # Set permissions for Flute storage and cache directories
+    echo "Setting Flute storage/ permissions..."
+    mkdir -p "$FLUTE_PATH/storage"
+    mkdir -p "$FLUTE_PATH/storage/app"
+    mkdir -p "$FLUTE_PATH/storage/app/public"
+    mkdir -p "$FLUTE_PATH/storage/app/uploads"
+    mkdir -p "$FLUTE_PATH/storage/framework"
+    mkdir -p "$FLUTE_PATH/storage/framework/cache"
+    mkdir -p "$FLUTE_PATH/storage/framework/sessions"
+    mkdir -p "$FLUTE_PATH/storage/framework/views"
+    mkdir -p "$FLUTE_PATH/storage/logs"
+
+    # Set ownership to web server user (www-data for nginx/php-fpm)
+    chown -R www-data:www-data "$FLUTE_PATH/storage"
+    chmod -R 775 "$FLUTE_PATH/storage"
+
+    # Also ensure bootstrap/cache is writable
+    if [ -d "$FLUTE_PATH/bootstrap/cache" ]; then
+        chown -R www-data:www-data "$FLUTE_PATH/bootstrap/cache"
+        chmod -R 775 "$FLUTE_PATH/bootstrap/cache"
     fi
 
     # Nginx php-fpm vhost (requires nginx)
@@ -742,11 +850,11 @@ echo "1. Go to https://steamcommunity.com/dev/apikey"
 echo "2. Register for a Steam Web API Key"
 echo "3. Add it to config/server-config.json (steamApiKey field)"
 echo ""
-echo "To start the Web UI:"
-echo "  systemctl start arma-reforger-webui"
+echo "To start the backend API:"
+echo "  systemctl start arma-reforger-backend"
 echo ""
 echo "To enable auto-start on boot:"
-echo "  systemctl enable arma-reforger-webui"
+echo "  systemctl enable arma-reforger-backend"
 echo ""
 echo "Then open your browser to:"
 echo "  http://YOUR_SERVER_IP:$WEB_UI_PORT"
